@@ -15,13 +15,12 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Firebase Auth',
+      title: 'GoTasks',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
       ),
-      home: const HomePage(title: 'Flutter Firebase Auth'),
+      home: const HomePage(title: 'GoTasks'),
     );
   }
 }
 
-//NOTE CLIENT ID KEY : 375032483661-ub85niudh0agjt1ch6srsmgi7klbi7db.apps.googleusercontent.com

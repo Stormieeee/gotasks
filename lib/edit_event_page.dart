@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:intl/intl.dart';
+import 'package:geocoding/geocoding.dart';
 import 'auth_service.dart';
 
 class EditEventPage extends StatefulWidget {
@@ -14,6 +15,7 @@ class EditEventPage extends StatefulWidget {
 
 class _EditEventPageState extends State<EditEventPage> {
   final _formKey = GlobalKey<FormState>();
+  final _locationController = TextEditingController();
   final AuthService _authService = AuthService();
   
   late String _title;
@@ -25,6 +27,7 @@ class _EditEventPageState extends State<EditEventPage> {
   late String _location;
   
   bool _isLoading = false;
+  bool _isValidatingLocation = false;
   String _errorMessage = '';
 
   @override
@@ -45,6 +48,7 @@ class _EditEventPageState extends State<EditEventPage> {
     _endTime = TimeOfDay(hour: endDateTime.hour, minute: endDateTime.minute);
     
     _location = widget.event.location ?? '';
+    _locationController.text = _location;
   }
 
   Future<void> _selectStartDate(BuildContext context) async {
@@ -113,12 +117,45 @@ class _EditEventPageState extends State<EditEventPage> {
     );
   }
 
+  Future<bool> _validateLocation(String location) async {
+    if (location.isEmpty) {
+      return true; // Empty location is valid (optional field)
+    }
+
+    setState(() {
+      _isValidatingLocation = true;
+    });
+
+    try {
+      final locations = await locationFromAddress(location);
+      
+      setState(() {
+        _isValidatingLocation = false;
+      });
+      
+      return locations.isNotEmpty;
+    } catch (e) {
+      setState(() {
+        _isValidatingLocation = false;
+      });
+      return false;
+    }
+  }
+
   Future<void> _updateEvent() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
     
     _formKey.currentState!.save();
+    
+    // Validate location before proceeding
+    if (!(await _validateLocation(_location))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invalid location. Please enter a valid address.')),
+      );
+      return;
+    }
     
     setState(() {
       _isLoading = true;
@@ -300,10 +337,34 @@ class _EditEventPageState extends State<EditEventPage> {
                     ),
                     SizedBox(height: 16.0),
                     TextFormField(
-                      initialValue: _location,
+                      controller: _locationController,
                       decoration: InputDecoration(
                         labelText: 'Location (Optional)',
                         border: OutlineInputBorder(),
+                        suffixIcon: _isValidatingLocation 
+                          ? Container(
+                              height: 20,
+                              width: 20,
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : IconButton(
+                              icon: Icon(Icons.search),
+                              onPressed: () async {
+                                if (_locationController.text.isNotEmpty) {
+                                  bool isValid = await _validateLocation(_locationController.text);
+                                  if (!isValid) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Could not find this location')),
+                                    );
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Location validated')),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
                       ),
                       onSaved: (value) {
                         _location = value ?? '';

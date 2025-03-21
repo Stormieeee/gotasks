@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:intl/intl.dart';
+import 'package:geocoding/geocoding.dart';
 import 'auth_service.dart';
 
 class CreateEventPage extends StatefulWidget {
@@ -10,6 +11,7 @@ class CreateEventPage extends StatefulWidget {
 
 class _CreateEventPageState extends State<CreateEventPage> {
   final _formKey = GlobalKey<FormState>();
+  final _locationController = TextEditingController();
   final AuthService _authService = AuthService();
   
   String _title = '';
@@ -23,8 +25,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
   String _location = '';
   
   bool _isLoading = false;
+  bool _isValidatingLocation = false;
   String _errorMessage = '';
 
+  // Date and time selection methods
   Future<void> _selectStartDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -91,12 +95,45 @@ class _CreateEventPageState extends State<CreateEventPage> {
     );
   }
 
+  Future<bool> _validateLocation(String location) async {
+    if (location.isEmpty) {
+      return true; // Empty location is valid (optional field)
+    }
+
+    setState(() {
+      _isValidatingLocation = true;
+    });
+
+    try {
+      final locations = await locationFromAddress(location);
+      
+      setState(() {
+        _isValidatingLocation = false;
+      });
+      
+      return locations.isNotEmpty;
+    } catch (e) {
+      setState(() {
+        _isValidatingLocation = false;
+      });
+      return false;
+    }
+  }
+
   Future<void> _createEvent() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
     
     _formKey.currentState!.save();
+    
+    // Validate location before proceeding
+    if (!(await _validateLocation(_location))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Invalid location. Please enter a valid address.')),
+      );
+      return;
+    }
     
     setState(() {
       _isLoading = true;
@@ -116,24 +153,21 @@ class _CreateEventPageState extends State<CreateEventPage> {
       
       final startDateTime = _combineDateAndTime(_startDate, _startTime);
       final endDateTime = _combineDateAndTime(_endDate, _endTime);
-      final event = calendar.Event();
       
+      // Create event
+      calendar.Event event = calendar.Event();
       event.summary = _title;
       event.description = _description;
-
-      final startEventDateTime = calendar.EventDateTime();
-      startEventDateTime.dateTime = startDateTime.toUtc();
-      startEventDateTime.timeZone = 'UTC';
-      event.start = startEventDateTime;
-
-      final endEventDateTime = calendar.EventDateTime();
-      endEventDateTime.dateTime = endDateTime.toUtc();
-      endEventDateTime.timeZone = 'UTC';
-      event.end = endEventDateTime;
-
-      if (_location.isNotEmpty) {
-        event.location = _location;
-      }
+      
+      calendar.EventDateTime start = calendar.EventDateTime();
+      start.dateTime = startDateTime.toUtc();
+      start.timeZone = 'UTC';
+      event.start = start;
+      
+      calendar.EventDateTime end = calendar.EventDateTime();
+      end.dateTime = endDateTime.toUtc();
+      end.timeZone = 'UTC';
+      event.end = end;
       
       if (_location.isNotEmpty) {
         event.location = _location;
@@ -277,9 +311,34 @@ class _CreateEventPageState extends State<CreateEventPage> {
                     ),
                     SizedBox(height: 16.0),
                     TextFormField(
+                      controller: _locationController,
                       decoration: InputDecoration(
                         labelText: 'Location (Optional)',
                         border: OutlineInputBorder(),
+                        suffixIcon: _isValidatingLocation 
+                          ? Container(
+                              height: 20,
+                              width: 20,
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : IconButton(
+                              icon: Icon(Icons.search),
+                              onPressed: () async {
+                                if (_locationController.text.isNotEmpty) {
+                                  bool isValid = await _validateLocation(_locationController.text);
+                                  if (!isValid) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Could not find this location')),
+                                    );
+                                  } else {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Location validated')),
+                                    );
+                                  }
+                                }
+                              },
+                            ),
                       ),
                       onSaved: (value) {
                         _location = value ?? '';
