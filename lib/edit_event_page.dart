@@ -1,0 +1,327 @@
+import 'package:flutter/material.dart';
+import 'package:googleapis/calendar/v3.dart' as calendar;
+import 'package:intl/intl.dart';
+import 'auth_service.dart';
+
+class EditEventPage extends StatefulWidget {
+  final calendar.Event event;
+  
+  const EditEventPage({Key? key, required this.event}) : super(key: key);
+
+  @override
+  _EditEventPageState createState() => _EditEventPageState();
+}
+
+class _EditEventPageState extends State<EditEventPage> {
+  final _formKey = GlobalKey<FormState>();
+  final AuthService _authService = AuthService();
+  
+  late String _title;
+  late String _description;
+  late DateTime _startDate;
+  late TimeOfDay _startTime;
+  late DateTime _endDate;
+  late TimeOfDay _endTime;
+  late String _location;
+  
+  bool _isLoading = false;
+  String _errorMessage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize form values from the event
+    _title = widget.event.summary ?? '';
+    _description = widget.event.description ?? '';
+    
+    final startDateTime = widget.event.start?.dateTime ?? DateTime.now();
+    final endDateTime = widget.event.end?.dateTime ?? DateTime.now().add(Duration(hours: 1));
+    
+    _startDate = startDateTime;
+    _startTime = TimeOfDay(hour: startDateTime.hour, minute: startDateTime.minute);
+    
+    _endDate = endDateTime;
+    _endTime = TimeOfDay(hour: endDateTime.hour, minute: endDateTime.minute);
+    
+    _location = widget.event.location ?? '';
+  }
+
+  Future<void> _selectStartDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: DateTime.now().subtract(Duration(days: 365)),
+      lastDate: DateTime.now().add(Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() {
+        _startDate = picked;
+        // If end date is before new start date, update end date
+        if (_endDate.isBefore(_startDate)) {
+          _endDate = _startDate;
+        }
+      });
+    }
+  }
+
+  Future<void> _selectStartTime(BuildContext context) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime,
+    );
+    if (picked != null) {
+      setState(() {
+        _startTime = picked;
+      });
+    }
+  }
+
+  Future<void> _selectEndDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _endDate,
+      firstDate: _startDate,
+      lastDate: DateTime.now().add(Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() {
+        _endDate = picked;
+      });
+    }
+  }
+
+  Future<void> _selectEndTime(BuildContext context) async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _endTime,
+    );
+    if (picked != null) {
+      setState(() {
+        _endTime = picked;
+      });
+    }
+  }
+
+  DateTime _combineDateAndTime(DateTime date, TimeOfDay time) {
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
+  }
+
+  Future<void> _updateEvent() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    
+    _formKey.currentState!.save();
+    
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+    
+    try {
+      final calendarApi = await _authService.getCalendarApi();
+      
+      if (calendarApi == null) {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = 'Failed to get Calendar API client';
+        });
+        return;
+      }
+      
+      final startDateTime = _combineDateAndTime(_startDate, _startTime);
+      final endDateTime = _combineDateAndTime(_endDate, _endTime);
+      
+      // Create updated event
+      calendar.Event updatedEvent = calendar.Event();
+      updatedEvent.id = widget.event.id;
+      updatedEvent.summary = _title;
+      updatedEvent.description = _description;
+      
+      calendar.EventDateTime start = calendar.EventDateTime();
+      start.dateTime = startDateTime.toUtc();
+      start.timeZone = 'UTC';
+      updatedEvent.start = start;
+      
+      calendar.EventDateTime end = calendar.EventDateTime();
+      end.dateTime = endDateTime.toUtc();
+      end.timeZone = 'UTC';
+      updatedEvent.end = end;
+      
+      if (_location.isNotEmpty) {
+        updatedEvent.location = _location;
+      }
+      
+      // Update the event
+      await calendarApi.events.update(updatedEvent, 'primary', widget.event.id!);
+      
+      setState(() {
+        _isLoading = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Event updated successfully!')),
+      );
+      
+      Navigator.pop(context, true); // Return true to indicate event was updated
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'Error updating event: $e';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Edit Event'),
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
+              padding: EdgeInsets.all(16.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_errorMessage.isNotEmpty)
+                      Padding(
+                        padding: EdgeInsets.only(bottom: 16.0),
+                        child: Text(
+                          _errorMessage,
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    TextFormField(
+                      initialValue: _title,
+                      decoration: InputDecoration(
+                        labelText: 'Title',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter a title';
+                        }
+                        return null;
+                      },
+                      onSaved: (value) {
+                        _title = value!;
+                      },
+                    ),
+                    SizedBox(height: 16.0),
+                    TextFormField(
+                      initialValue: _description,
+                      decoration: InputDecoration(
+                        labelText: 'Description',
+                        border: OutlineInputBorder(),
+                      ),
+                      maxLines: 3,
+                      onSaved: (value) {
+                        _description = value ?? '';
+                      },
+                    ),
+                    SizedBox(height: 16.0),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _selectStartDate(context),
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'Start Date',
+                                border: OutlineInputBorder(),
+                              ),
+                              child: Text(
+                                DateFormat('MM/dd/yyyy').format(_startDate),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 16.0),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _selectStartTime(context),
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'Start Time',
+                                border: OutlineInputBorder(),
+                              ),
+                              child: Text(
+                                _startTime.format(context),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16.0),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _selectEndDate(context),
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'End Date',
+                                border: OutlineInputBorder(),
+                              ),
+                              child: Text(
+                                DateFormat('MM/dd/yyyy').format(_endDate),
+                              ),
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 16.0),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => _selectEndTime(context),
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: 'End Time',
+                                border: OutlineInputBorder(),
+                              ),
+                              child: Text(
+                                _endTime.format(context),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: 16.0),
+                    TextFormField(
+                      initialValue: _location,
+                      decoration: InputDecoration(
+                        labelText: 'Location (Optional)',
+                        border: OutlineInputBorder(),
+                      ),
+                      onSaved: (value) {
+                        _location = value ?? '';
+                      },
+                    ),
+                    SizedBox(height: 24.0),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50.0,
+                      child: ElevatedButton(
+                        onPressed: _updateEvent,
+                        child: Text('Update Event'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+    );
+  }
+}

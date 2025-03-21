@@ -1,0 +1,5 @@
+package com.example.gotask
+
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity()
