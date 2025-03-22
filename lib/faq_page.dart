@@ -96,6 +96,7 @@ class _FAQPageState extends State<FAQPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true, // This helps with keyboard appearance
       appBar: AppBar(
         elevation: 0,
         backgroundColor: Colors.blue.shade800,
@@ -122,192 +123,213 @@ class _FAQPageState extends State<FAQPage> {
           ),
         ),
         child: SafeArea(
-          child: Column(
-            children: [
-              // Header
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Need Help?',
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+          child: GestureDetector(
+            onTap: () {
+              // Dismiss keyboard when tapping outside of text field
+              FocusScope.of(context).unfocus();
+            },
+            child: Column(
+              children: [
+                // Header (made smaller to reduce space usage)
+                Padding(
+                  padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Need Help?',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                    Text(
-                      'Find answers to common questions about GoTask',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              // Search Bar
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: Offset(0, 2),
+                      Text(
+                        'Find answers to common questions about GoTask',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
                       ),
                     ],
                   ),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search questions...',
-                      prefixIcon: Icon(Icons.search, color: Colors.blue.shade700),
-                      border: InputBorder.none,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                ),
+                
+                // Search Bar
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 8,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
                     ),
-                    onChanged: (value) {
-                      setState(() {
-                        _searchQuery = value;
-                      });
-                    },
+                    child: TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search questions...',
+                        prefixIcon: Icon(Icons.search, color: Colors.blue.shade700),
+                        suffixIcon: _searchQuery.isNotEmpty 
+                          ? IconButton(
+                              icon: Icon(Icons.clear, color: Colors.grey),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {
+                                  _searchQuery = '';
+                                });
+                                // Dismiss keyboard
+                                FocusScope.of(context).unfocus();
+                              },
+                            )
+                          : null,
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _searchQuery = value;
+                        });
+                      },
+                    ),
                   ),
                 ),
-              ),
-              
-              // FAQ List
-              Expanded(
-                child: _filteredFaqItems.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.search_off,
-                            size: 64,
-                            color: Colors.grey.shade400,
-                          ),
-                          SizedBox(height: 16),
-                          Text(
-                            'No matching questions found',
-                            style: TextStyle(
-                              fontSize: 18,
-                              color: Colors.grey.shade600,
+                
+                // FAQ List - Wrapped in Expanded + Flexible to handle keyboard
+                Flexible(
+                  child: _filteredFaqItems.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.search_off,
+                              size: 60,
+                              color: Colors.grey.shade400,
                             ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Try a different search term',
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.grey.shade500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      itemCount: _filteredFaqItems.length,
-                      itemBuilder: (context, index) {
-                        // Adjust the expanded state list if needed
-                        if (_expandedList.length <= index) {
-                          _expandedList.add(false);
-                        }
-                        
-                        return Card(
-                          margin: EdgeInsets.only(bottom: 12),
-                          elevation: 2,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: ExpansionTile(
-                            initiallyExpanded: _expandedList[index],
-                            onExpansionChanged: (expanded) {
-                              setState(() {
-                                _expandedList[index] = expanded;
-                              });
-                            },
-                            title: Text(
-                              _filteredFaqItems[index]['question']!,
+                            SizedBox(height: 12),
+                            Text(
+                              'No matching questions found',
                               style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade800,
                                 fontSize: 16,
+                                color: Colors.grey.shade600,
                               ),
                             ),
-                            tilePadding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            childrenPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-                            expandedCrossAxisAlignment: CrossAxisAlignment.start,
-                            trailing: Icon(
-                              _expandedList[index] ? Icons.remove : Icons.add,
-                              color: Colors.blue.shade700,
+                            Text(
+                              'Try a different search term',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey.shade500,
+                              ),
                             ),
-                            children: [
-                              Text(
-                                _filteredFaqItems[index]['answer']!,
+                          ],
+                        ),
+                      )
+                    : ListView.builder(
+                        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                        itemCount: _filteredFaqItems.length,
+                        itemBuilder: (context, index) {
+                          // Adjust the expanded state list if needed
+                          if (_expandedList.length <= index) {
+                            _expandedList.add(false);
+                          }
+                          
+                          return Card(
+                            margin: EdgeInsets.only(bottom: 8),
+                            elevation: 2,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ExpansionTile(
+                              initiallyExpanded: _expandedList[index],
+                              onExpansionChanged: (expanded) {
+                                setState(() {
+                                  _expandedList[index] = expanded;
+                                });
+                              },
+                              title: Text(
+                                _filteredFaqItems[index]['question']!,
                                 style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue.shade800,
                                   fontSize: 15,
-                                  color: Colors.grey.shade800,
-                                  height: 1.5,
                                 ),
                               ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-              ),
-              
-              // Footer
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                child: Column(
-                  children: [
-                    Text(
-                      'Still have questions?',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue.shade800,
+                              tilePadding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                              childrenPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                              expandedCrossAxisAlignment: CrossAxisAlignment.start,
+                              trailing: Icon(
+                                _expandedList[index] ? Icons.remove : Icons.add,
+                                color: Colors.blue.shade700,
+                              ),
+                              children: [
+                                Text(
+                                  _filteredFaqItems[index]['answer']!,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade800,
+                                    height: 1.4,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
                       ),
-                    ),
-                    SizedBox(height: 8),
-                    ElevatedButton.icon(
-                      onPressed: () {
-                        // Navigate to feedback page when pressed
-                        Navigator.of(context).pop();
-                        // Add navigation to feedback page here
-                      },
-                      icon: Icon(Icons.feedback_outlined),
-                      label: Text('Send Feedback'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blue.shade700,
-                        foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-                    SizedBox(height: 16),
-                    Text(
-                      'GoTask v1.0.0',
-                      style: TextStyle(
-                        color: Colors.black.withOpacity(0.6),
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
                 ),
-              ),
-            ],
+                
+                // Footer - Wrapped in Visibility to hide when keyboard is open
+                Visibility(
+                  visible: MediaQuery.of(context).viewInsets.bottom == 0,
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    child: Column(
+                      children: [
+                        Text(
+                          'Still have questions?',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade800,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            // Navigate to feedback page when pressed
+                            Navigator.of(context).pop();
+                            // Add navigation to feedback page here
+                          },
+                          icon: Icon(Icons.feedback_outlined),
+                          label: Text('Send Feedback'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade700,
+                            foregroundColor: Colors.white,
+                            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          'GoTask v1.0.0',
+                          style: TextStyle(
+                            color: Colors.black.withOpacity(0.6),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
