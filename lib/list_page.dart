@@ -6,6 +6,7 @@ import 'auth_service.dart';
 import 'create_event_page.dart';
 import 'edit_event_page.dart';
 import 'view_event_page.dart';
+import 'profile_page.dart';
 
 class ListPage extends StatefulWidget {
   const ListPage({Key? key}) : super(key: key);
@@ -43,7 +44,7 @@ class _CalendarPageState extends State<ListPage> {
         return;
       }
 
-      // Get events from primary calendar for next 7 days
+      // Get events from primary calendar for next 30 days
       final now = DateTime.now();
       final days = now.add(Duration(days: 30));
       
@@ -143,106 +144,364 @@ class _CalendarPageState extends State<ListPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('GoTask: List View'),
+        elevation: 0,
+        backgroundColor: Colors.blue.shade800,
+        title: Text(
+          'GoTask',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 22,
+          ),
+        ),
         actions: [
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _fetchCalendarEvents,
+            tooltip: 'Refresh Events',
           ),
+          IconButton(
+            icon: Icon(Icons.account_circle),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => ProfilePage(user: _authService.currentUser!),
+                ),
+              );
+  },
+  tooltip: 'User Profile',
+),
         ],
       ),
-      body: Stack(
-        children: [
-          _isLoading
-              ? Center(child: CircularProgressIndicator())
-              : _errorMessage.isNotEmpty
-                  ? Center(child: Text(_errorMessage, style: TextStyle(color: Colors.red)))
-                  : _events.isEmpty
-                      ? Center(child: Text('No events scheduled for the next 7 days'))
-                      : ListView.builder(
-                          itemCount: _events.length,
-                          itemBuilder: (context, index) {
-                            final event = _events[index];
-                            final start = event.start?.dateTime ?? DateTime.now();
-                            final end = event.end?.dateTime ?? DateTime.now();
-                            
-                            final formattedDate = DateFormat('EEE, MMM d, yyyy').format(start);
-                            final formattedStartTime = DateFormat('h:mm a').format(start);
-                            final formattedEndTime = DateFormat('h:mm a').format(end);
-                            
-                            return Card(
-                              margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              child: InkWell(
-                                onTap: () => _viewEventDetails(event),
-                                child: Column(
-                                  children: [
-                                    ListTile(
-                                      title: Text(event.summary ?? 'Untitled Event'),
-                                      subtitle: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(formattedDate),
-                                          Text('$formattedStartTime - $formattedEndTime'),
-                                          if (event.location != null && event.location!.isNotEmpty)
-                                            Text('📍 ${event.location}', style: TextStyle(fontSize: 12)),
-                                        ],
-                                      ),
-                                      isThreeLine: true,
-                                      trailing: Icon(Icons.chevron_right),
-                                    ),
-                                    ButtonBar(
-                                      alignment: MainAxisAlignment.end,
-                                      children: [
-                                        IconButton(
-                                          icon: Icon(Icons.edit, color: Colors.blue),
-                                          tooltip: 'Edit Event',
-                                          onPressed: () async {
-                                            final result = await Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (context) => EditEventPage(event: event),
-                                              ),
-                                            );
-                                            
-                                            if (result == true) {
-                                              _fetchCalendarEvents();
-                                            }
-                                          },
-                                        ),
-                                        IconButton(
-                                          icon: Icon(Icons.clear, color: Colors.red),
-                                          tooltip: 'Delete Event',
-                                          onPressed: () => _deleteEvent(event),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-          Positioned(
-            left: 16,
-            bottom: 16,
-            child: FloatingActionButton(
-              heroTag: "switchToCalendar", // Add a unique hero tag to avoid conflicts
-              onPressed: () {
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => CalendarPage(),
-                  ),
-                );
-              },
-              child: Icon(Icons.calendar_month),
-              tooltip: 'Switch to Calendar View',
-            ),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.center,
+            colors: [
+              Colors.blue.shade800,
+              Colors.blue.shade50,
+            ],
           ),
-        ],
+        ),
+        child: Stack(
+          children: [
+            // Header section
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Upcoming Events',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      'Next 30 days',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            
+            // Main content
+            Padding(
+              padding: EdgeInsets.only(top: 80),
+              child: _isLoading
+                ? Center(
+                    child: CircularProgressIndicator(
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : _errorMessage.isNotEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 60,
+                              color: Colors.red.shade300,
+                            ),
+                            SizedBox(height: 16),
+                            Text(
+                              _errorMessage,
+                              style: TextStyle(color: Colors.red.shade300),
+                              textAlign: TextAlign.center,
+                            ),
+                            SizedBox(height: 24),
+                            ElevatedButton(
+                              onPressed: _fetchCalendarEvents,
+                              child: Text('Try Again'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue.shade700,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _events.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.event_available,
+                                  size: 80,
+                                  color: Colors.blue.shade200,
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  'No events scheduled',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    color: Colors.blue.shade700,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Tap the + button to create a new event',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.blue.shade600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ClipRRect(
+                            borderRadius: BorderRadius.only(
+                              topLeft: Radius.circular(30),
+                              topRight: Radius.circular(30),
+                            ),
+                            child: Container(
+                              color: Colors.white,
+                              child: ListView.builder(
+                                padding: EdgeInsets.only(top: 16, bottom: 80),
+                                itemCount: _events.length,
+                                itemBuilder: (context, index) {
+                                  final event = _events[index];
+                                  final start = event.start?.dateTime ?? DateTime.now();
+                                  final end = event.end?.dateTime ?? DateTime.now();
+                                  
+                                  // Show date header for each new date
+                                  bool showHeader = index == 0 || 
+                                    !isSameDay(start, _events[index - 1].start?.dateTime);
+                                  
+                                  final formattedStartTime = DateFormat('h:mm a').format(start);
+                                  final formattedEndTime = DateFormat('h:mm a').format(end);
+                                  
+                                  return Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      if (showHeader)
+                                        Padding(
+                                          padding: EdgeInsets.only(
+                                            left: 24, 
+                                            right: 24, 
+                                            top: index == 0 ? 8 : 24, 
+                                            bottom: 12
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                DateFormat('EEEE').format(start),
+                                                style: TextStyle(
+                                                  fontSize: 14,
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.blue.shade700,
+                                                ),
+                                              ),
+                                              Text(
+                                                DateFormat('MMMM d, yyyy').format(start),
+                                                style: TextStyle(
+                                                  fontSize: 20,
+                                                  fontWeight: FontWeight.bold,
+                                                  color: Colors.blue.shade900,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      Card(
+                                        margin: EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                                        elevation: 2,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: InkWell(
+                                          onTap: () => _viewEventDetails(event),
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: Padding(
+                                            padding: EdgeInsets.all(8),
+                                            child: Column(
+                                              children: [
+                                                ListTile(
+                                                  leading: Container(
+                                                    width: 48,
+                                                    height: 48,
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.blue.shade50,
+                                                      borderRadius: BorderRadius.circular(8),
+                                                    ),
+                                                    child: Icon(
+                                                      Icons.event,
+                                                      color: Colors.blue.shade700,
+                                                    ),
+                                                  ),
+                                                  title: Text(
+                                                    event.summary ?? 'Untitled Event',
+                                                    style: TextStyle(
+                                                      fontWeight: FontWeight.bold,
+                                                      fontSize: 16,
+                                                    ),
+                                                  ),
+                                                  subtitle: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      SizedBox(height: 4),
+                                                      Row(
+                                                        children: [
+                                                          Icon(
+                                                            Icons.access_time,
+                                                            size: 14,
+                                                            color: Colors.grey.shade600,
+                                                          ),
+                                                          SizedBox(width: 4),
+                                                          Text(
+                                                            '$formattedStartTime - $formattedEndTime',
+                                                            style: TextStyle(
+                                                              color: Colors.grey.shade700,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                      if (event.location != null && event.location!.isNotEmpty)
+                                                        Padding(
+                                                          padding: EdgeInsets.only(top: 4),
+                                                          child: Row(
+                                                            children: [
+                                                              Icon(
+                                                                Icons.location_on,
+                                                                size: 14,
+                                                                color: Colors.grey.shade600,
+                                                              ),
+                                                              SizedBox(width: 4),
+                                                              Expanded(
+                                                                child: Text(
+                                                                  event.location!,
+                                                                  style: TextStyle(
+                                                                    color: Colors.grey.shade700,
+                                                                    fontSize: 12,
+                                                                  ),
+                                                                  maxLines: 1,
+                                                                  overflow: TextOverflow.ellipsis,
+                                                                ),
+                                                              ),
+                                                            ],
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                  isThreeLine: true,
+                                                  trailing: Icon(
+                                                    Icons.chevron_right,
+                                                    color: Colors.blue,
+                                                  ),
+                                                ),
+                                                Row(
+                                                  mainAxisAlignment: MainAxisAlignment.end,
+                                                  children: [
+                                                    TextButton.icon(
+                                                      icon: Icon(
+                                                        Icons.edit,
+                                                        size: 18,
+                                                      ),
+                                                      label: Text('Edit'),
+                                                      style: TextButton.styleFrom(
+                                                        foregroundColor: Colors.blue.shade700,
+                                                      ),
+                                                      onPressed: () async {
+                                                        final result = await Navigator.push(
+                                                          context,
+                                                          MaterialPageRoute(
+                                                            builder: (context) => EditEventPage(event: event),
+                                                          ),
+                                                        );
+                                                        
+                                                        if (result == true) {
+                                                          _fetchCalendarEvents();
+                                                        }
+                                                      },
+                                                    ),
+                                                    TextButton.icon(
+                                                      icon: Icon(
+                                                        Icons.delete_outline,
+                                                        size: 18,
+                                                      ),
+                                                      label: Text('Delete'),
+                                                      style: TextButton.styleFrom(
+                                                        foregroundColor: Colors.red,
+                                                      ),
+                                                      onPressed: () => _deleteEvent(event),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+            ),
+            
+            // Calendar view button
+            Positioned(
+              left: 16,
+              bottom: 16,
+              child: FloatingActionButton(
+                heroTag: "switchToCalendar",
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.blue.shade700,
+                elevation: 4,
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CalendarPage(),
+                    ),
+                  );
+                },
+                child: Icon(Icons.calendar_month),
+                tooltip: 'Switch to Calendar View',
+              ),
+            ),
+          ],
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: "addEvent",
+        backgroundColor: Colors.blue.shade700,
         onPressed: () async {
           final result = await Navigator.push(
             context,
@@ -251,7 +510,6 @@ class _CalendarPageState extends State<ListPage> {
             ),
           );
           
-          // If an event was created, refresh the calendar
           if (result == true) {
             _fetchCalendarEvents();
           }
@@ -260,5 +518,11 @@ class _CalendarPageState extends State<ListPage> {
         tooltip: 'Add Event',
       ),
     );
+  }
+  
+  // Helper function to check if two dates are the same day
+  bool isSameDay(DateTime? date1, DateTime? date2) {
+    if (date1 == null || date2 == null) return false;
+    return date1.year == date2.year && date1.month == date2.month && date1.day == date2.day;
   }
 }
