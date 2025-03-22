@@ -5,8 +5,8 @@ import 'package:gotask/Pages/create_event_page.dart';
 import 'package:gotask/Pages/edit_event_page.dart';
 import 'package:gotask/services/auth_service.dart';
 import 'package:intl/intl.dart';
-import 'view_event_page.dart';
-import 'profile_page.dart';
+import 'package:gotask/Pages/view_event_page.dart';
+import 'package:gotask/Pages/profile_page.dart';
 
 class ListPage extends StatefulWidget {
   const ListPage({Key? key}) : super(key: key);

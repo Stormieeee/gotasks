@@ -4,7 +4,7 @@ import 'package:gotask/Pages/edit_event_page.dart';
 import 'package:gotask/Pages/list_page.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
-import '../services/auth_service.dart';
+import 'package:gotask/services/auth_service.dart';
 import 'create_event_page.dart';
 import 'view_event_page.dart';
 import 'profile_page.dart';
