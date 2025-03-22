@@ -30,13 +30,12 @@ jobs:
       - name: Create Firebase Service Credentials file
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}' > firebase_credentials.json
       
-      # Display Signing Key Fingerprints
       - name: Display Signing Report (Debug and Release Keys)
         run: |
           cd android
+          chmod +x ./gradlew
           ./gradlew signingReport
-          cd ..
-      
+           cd ..
       - name: Build APK
         run: flutter build apk --release
       
