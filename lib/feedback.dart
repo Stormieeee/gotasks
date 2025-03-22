@@ -248,123 +248,135 @@ class _FeedbackPageState extends State<FeedbackPage> {
   }
   
   Widget _buildSuccessView() {
-    return SingleChildScrollView(
-      child: Padding(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          children: [
-            SizedBox(height: 40),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: Offset(0, 5),
+  return Container(
+    width: double.infinity,
+    height: double.infinity,
+    child: SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          minHeight: MediaQuery.of(context).size.height - AppBar().preferredSize.height - MediaQuery.of(context).padding.top,
+        ),
+        child: IntrinsicHeight(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(height: 40),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: Offset(0, 5),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: CircleAvatar(
-                radius: 60,
-                backgroundColor: Colors.green.shade100,
-                child: Icon(
-                  Icons.check,
-                  size: 80,
-                  color: Colors.green.shade600,
-                ),
-              ),
-            ),
-            SizedBox(height: 30),
-            Text(
-              'Thank You!',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.blue.shade800,
-              ),
-            ),
-            SizedBox(height: 16),
-            Text(
-              'Your feedback has been submitted successfully.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 18,
-                color: Colors.blue.shade800,
-              ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              'We appreciate your input and will review it soon.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.grey.shade700,
-              ),
-            ),
-            SizedBox(height: 40),
-            SizedBox(
-              width: double.infinity,
-              height: 56.0,
-              child: ElevatedButton(
-                onPressed: () {
-                  setState(() {
-                    _isSent = false;
-                  });
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blue.shade700,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                  child: CircleAvatar(
+                    radius: 60,
+                    backgroundColor: Colors.green.shade100,
+                    child: Icon(
+                      Icons.check,
+                      size: 80,
+                      color: Colors.green.shade600,
+                    ),
                   ),
-                  elevation: 2,
                 ),
-                child: Text(
-                  'Send Another Feedback',
+                SizedBox(height: 30),
+                Text(
+                  'Thank You!',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade800,
+                  ),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Your feedback has been submitted successfully.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.blue.shade800,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'We appreciate your input and will review it soon.',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    color: Colors.grey.shade700,
                   ),
                 ),
-              ),
-            ),
-            SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              height: 56.0,
-              child: OutlinedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.blue.shade700,
-                  side: BorderSide(color: Colors.blue.shade700),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                Spacer(flex: 1),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56.0,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _isSent = false;
+                      });
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue.shade700,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: Text(
+                      'Send Another Feedback',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                 ),
-                child: Text(
-                  'Return to Profile',
+                SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56.0,
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.blue.shade700,
+                      side: BorderSide(color: Colors.blue.shade700),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      'Return to Profile',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+                SizedBox(height: 40),
+                Text(
+                  'GoTask v1.0.0',
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+                    color: Colors.black.withOpacity(0.6),
+                    fontSize: 12,
                   ),
                 ),
-              ),
+              ],
             ),
-            SizedBox(height: 40),
-            Text(
-              'GoTask v1.0.0',
-              style: TextStyle(
-                color: Colors.black.withOpacity(0.6),
-                fontSize: 12,
-              ),
-            ),
-          ],
+          ),
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildFeedbackForm() {
     return SingleChildScrollView(

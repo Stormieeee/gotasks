@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:gotask/faq_page.dart';
 import 'package:gotask/feedback.dart';
 import 'package:gotask/home_Page.dart';
 import 'auth_service.dart';
@@ -131,21 +132,18 @@ class ProfilePage extends StatelessWidget {
                                     context,
                                     MaterialPageRoute(builder: (context) => FeedbackPage(user: user)),
                                   );
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Feedback feature coming soon'))
-                                );
                               },
                             ),
                             
                             ListTile(
                               leading: Icon(Icons.help_outline, color: Colors.blue.shade700),
-                              title: Text('Help & Support'),
+                              title: Text('Frequently Asked Questions'),
                               trailing: Icon(Icons.chevron_right),
                               onTap: () {
-                                // Implement help functionality
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Help center coming soon'))
-                                );
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => FAQPage()),
+                                  );
                               },
                             ),
                             
