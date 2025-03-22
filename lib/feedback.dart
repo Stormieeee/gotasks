@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:developer' as developer;
 
 class FeedbackPage extends StatefulWidget {
   final User user;
@@ -20,6 +21,8 @@ class _FeedbackPageState extends State<FeedbackPage> {
   bool _isLoading = false;
   bool _isSent = false;
   String _errorMessage = '';
+  String _testResult = '';
+  bool _isTestingFirestore = false;
   
   // Feedback type options
   final List<String> _feedbackTypes = [
@@ -35,6 +38,51 @@ class _FeedbackPageState extends State<FeedbackPage> {
     _subjectController.dispose();
     _messageController.dispose();
     super.dispose();
+  }
+
+  // Log a message and update test results
+  void _log(String message) {
+    developer.log(message, name: 'FIRESTORE_TEST');
+    setState(() {
+      _testResult = '$message\n$_testResult';
+    });
+  }
+
+  // Test Firestore connection
+  Future<void> _testFirestoreConnection() async {
+    setState(() {
+      _isTestingFirestore = true;
+      _testResult = '';
+    });
+    
+    try {
+      _log('Testing Firestore connection...');
+      _log('Firebase initialized: ${FirebaseAuth.instance.app != null ? 'YES' : 'NO'}');
+      
+      // Get the Firestore instance
+      final firestore = FirebaseFirestore.instance;
+      _log('Firestore instance created');
+      
+      // Try to write a test document
+      _log('Attempting to write test document to "feedback" collection...');
+      
+      DocumentReference docRef = await firestore.collection('feedback').add({
+        'testUser': widget.user.uid,
+        'testEmail': widget.user.email,
+        'testMessage': 'This is a test from the app',
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+      
+      _log('SUCCESS! Test document written with ID: ${docRef.id}');
+      _log('Firestore connection is working correctly!');
+      
+    } catch (e) {
+      _log('ERROR: $e');
+    } finally {
+      setState(() {
+        _isTestingFirestore = false;
+      });
+    }
   }
 
   Future<void> _submitFeedback() async {
@@ -53,7 +101,7 @@ class _FeedbackPageState extends State<FeedbackPage> {
       final String message = _messageController.text.trim();
       
       // Save to Firestore
-      await FirebaseFirestore.instance.collection('feedbackdatabase').add({
+      await FirebaseFirestore.instance.collection('feedback').add({
         'userId': widget.user.uid,
         'userEmail': widget.user.email,
         'userName': widget.user.displayName,
@@ -114,6 +162,64 @@ class _FeedbackPageState extends State<FeedbackPage> {
           icon: Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        actions: [
+          // Debug test button in the app bar
+          IconButton(
+            icon: Icon(Icons.bug_report),
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: Text('Firestore Test'),
+                  content: Container(
+                    width: double.maxFinite,
+                    height: 400,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ElevatedButton(
+                          onPressed: _isTestingFirestore ? null : _testFirestoreConnection,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue.shade700,
+                          ),
+                          child: _isTestingFirestore
+                              ? CircularProgressIndicator(color: Colors.white)
+                              : Text('Test Firestore Connection'),
+                        ),
+                        SizedBox(height: 16),
+                        Expanded(
+                          child: Container(
+                            padding: EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade100,
+                              border: Border.all(color: Colors.grey.shade300),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: SingleChildScrollView(
+                              child: Text(
+                                _testResult.isEmpty ? 'No test results yet' : _testResult,
+                                style: TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text('Close'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ],
       ),
       body: Container(
         decoration: BoxDecoration(
