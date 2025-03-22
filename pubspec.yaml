@@ -37,7 +37,11 @@ dependencies:
   googleapis_auth: ^1.4.1
   http: ^1.1.0
   syncfusion_flutter_calendar: ^23.2.7  # Optional: For displaying calendar
-
+  google_maps_flutter: ^2.5.0
+  geocoding: ^2.1.1
+  url_launcher: ^6.2.1
+  table_calendar: ^3.0.9
+  cloud_firestore: ^4.17.5
 dev_dependencies:
   flutter_test:
     sdk: flutter
