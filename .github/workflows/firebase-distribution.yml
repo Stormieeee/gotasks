@@ -2,7 +2,7 @@ name: Build and Deploy to Firebase App Distribution
 
 on:
   push:
-    branches: [ dev ]  # Adjust according to your branch name
+    branches: [ dev ]  # Run when pushing to dev branch
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
@@ -30,21 +30,17 @@ jobs:
       - name: Create Firebase Service Credentials file
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}' > firebase_credentials.json
       
-      - name: Display Signing Report (Debug and Release Keys)
+      # Initialize Gradle wrapper if needed
+      - name: Set up Gradle Wrapper
         run: |
-          cd android
-          chmod +x ./gradlew
-          ./gradlew signingReport
-           cd ..
+          flutter build apk --debug --build-name=0.0.1 --build-number=1
+          
       - name: Build APK
         run: flutter build apk --release
       
-      # Extract fingerprints from the built APK
-      - name: Extract APK Fingerprints
-        run: |
-          echo "Extracting fingerprints from release APK"
-          unzip -p build/app/outputs/flutter-apk/app-release.apk META-INF/CERT.RSA | keytool -printcert
-          echo "====== FINGERPRINTS ABOVE ======"
+      # Get signing information through Flutter
+      - name: Display Signing Information
+        run: flutter build apk --debug --verbose
           
       - name: Deploy to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
