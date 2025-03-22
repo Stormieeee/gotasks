@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:gotask/faq_page.dart';
-import 'package:gotask/feedback.dart';
-import 'package:gotask/home_Page.dart';
-import 'auth_service.dart';
+import 'package:gotask/Pages/faq_page.dart';
+import 'package:gotask/Pages/feedback.dart';
+import 'package:gotask/Pages/home_Page.dart';
+import '../services/auth_service.dart';
 
 class ProfilePage extends StatelessWidget {
   final AuthService _authService = AuthService();

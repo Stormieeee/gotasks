@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'auth_service.dart';
-import 'list_page.dart';
+import 'package:gotask/Pages/list_page.dart';
+import 'package:gotask/services/auth_service.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.title});

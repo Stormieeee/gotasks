@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
-import 'package:gotask/edit_event_page.dart';
+import 'package:gotask/Pages/edit_event_page.dart';
+import 'package:gotask/Pages/list_page.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'auth_service.dart';
+import '../services/auth_service.dart';
 import 'create_event_page.dart';
 import 'view_event_page.dart';
-import 'list_page.dart';
 import 'profile_page.dart';
 
 class CalendarPage extends StatefulWidget {

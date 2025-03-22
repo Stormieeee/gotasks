@@ -2,38 +2,60 @@ import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:intl/intl.dart';
 import 'package:geocoding/geocoding.dart';
-import 'auth_service.dart';
+import '../services/auth_service.dart';
 
-class CreateEventPage extends StatefulWidget {
+class EditEventPage extends StatefulWidget {
+  final calendar.Event event;
+  
+  const EditEventPage({Key? key, required this.event}) : super(key: key);
+
   @override
-  _CreateEventPageState createState() => _CreateEventPageState();
+  _EditEventPageState createState() => _EditEventPageState();
 }
 
-class _CreateEventPageState extends State<CreateEventPage> {
+class _EditEventPageState extends State<EditEventPage> {
   final _formKey = GlobalKey<FormState>();
   final _locationController = TextEditingController();
   final AuthService _authService = AuthService();
   
-  String _title = '';
-  String _description = '';
-  DateTime _startDate = DateTime.now();
-  TimeOfDay _startTime = TimeOfDay.now();
-  DateTime _endDate = DateTime.now();
-  TimeOfDay _endTime = TimeOfDay.fromDateTime(
-    DateTime.now().add(Duration(hours: 1))
-  );
-  String _location = '';
+  late String _title;
+  late String _description;
+  late DateTime _startDate;
+  late TimeOfDay _startTime;
+  late DateTime _endDate;
+  late TimeOfDay _endTime;
+  late String _location;
   
   bool _isLoading = false;
   bool _isValidatingLocation = false;
   String _errorMessage = '';
 
-  // Date and time selection methods
+  @override
+  void initState() {
+    super.initState();
+    
+    // Initialize form values from the event
+    _title = widget.event.summary ?? '';
+    _description = widget.event.description ?? '';
+    
+    final startDateTime = widget.event.start?.dateTime ?? DateTime.now();
+    final endDateTime = widget.event.end?.dateTime ?? DateTime.now().add(Duration(hours: 1));
+    
+    _startDate = startDateTime;
+    _startTime = TimeOfDay(hour: startDateTime.hour, minute: startDateTime.minute);
+    
+    _endDate = endDateTime;
+    _endTime = TimeOfDay(hour: endDateTime.hour, minute: endDateTime.minute);
+    
+    _location = widget.event.location ?? '';
+    _locationController.text = _location;
+  }
+
   Future<void> _selectStartDate(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _startDate,
-      firstDate: DateTime.now(),
+      firstDate: DateTime.now().subtract(Duration(days: 365)),
       lastDate: DateTime.now().add(Duration(days: 365)),
       builder: (context, child) {
         return Theme(
@@ -166,7 +188,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
   }
 
-  Future<void> _createEvent() async {
+  Future<void> _updateEvent() async {
     if (!_formKey.currentState!.validate()) {
       return;
     }
@@ -176,7 +198,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
     // Validate location before proceeding
     if (!(await _validateLocation(_location))) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Invalid location. Please enter a valid address.')),
+        SnackBar(
+          content: Text('Invalid location. Please enter a valid address.'),
+          backgroundColor: Colors.red.shade600,
+        ),
       );
       return;
     }
@@ -200,26 +225,28 @@ class _CreateEventPageState extends State<CreateEventPage> {
       final startDateTime = _combineDateAndTime(_startDate, _startTime);
       final endDateTime = _combineDateAndTime(_endDate, _endTime);
       
-      // Create event
-      calendar.Event event = calendar.Event();
-      event.summary = _title;
-      event.description = _description;
+      // Create updated event
+      calendar.Event updatedEvent = calendar.Event();
+      updatedEvent.id = widget.event.id;
+      updatedEvent.summary = _title;
+      updatedEvent.description = _description;
       
       calendar.EventDateTime start = calendar.EventDateTime();
       start.dateTime = startDateTime.toUtc();
       start.timeZone = 'UTC';
-      event.start = start;
+      updatedEvent.start = start;
       
       calendar.EventDateTime end = calendar.EventDateTime();
       end.dateTime = endDateTime.toUtc();
       end.timeZone = 'UTC';
-      event.end = end;
+      updatedEvent.end = end;
       
       if (_location.isNotEmpty) {
-        event.location = _location;
+        updatedEvent.location = _location;
       }
       
-      await calendarApi.events.insert(event, 'primary');
+      // Update the event
+      await calendarApi.events.update(updatedEvent, 'primary', widget.event.id!);
       
       setState(() {
         _isLoading = false;
@@ -227,16 +254,16 @@ class _CreateEventPageState extends State<CreateEventPage> {
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Event created successfully!'),
+          content: Text('Event updated successfully!'),
           backgroundColor: Colors.green.shade600,
         ),
       );
       
-      Navigator.pop(context, true); // Return true to indicate event was created
+      Navigator.pop(context, true); // Return true to indicate event was updated
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Error creating event: $e';
+        _errorMessage = 'Error updating event: $e';
       });
     }
   }
@@ -248,7 +275,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         elevation: 0,
         backgroundColor: Colors.blue.shade800,
         title: Text(
-          'Create Event',
+          'Edit Event',
           style: TextStyle(
             fontWeight: FontWeight.bold,
           ),
@@ -282,7 +309,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'New Event',
+                              'Edit Event',
                               style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -290,7 +317,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                               ),
                             ),
                             Text(
-                              'Fill in the details below',
+                              'Update event details',
                               style: TextStyle(
                                 fontSize: 16,
                                 color: Colors.white.withOpacity(0.9),
@@ -355,6 +382,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                 ),
                                 SizedBox(height: 16),
                                 TextFormField(
+                                  initialValue: _title,
                                   decoration: InputDecoration(
                                     labelText: 'Title',
                                     hintText: 'Enter event title',
@@ -382,6 +410,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                 ),
                                 SizedBox(height: 20),
                                 TextFormField(
+                                  initialValue: _description,
                                   decoration: InputDecoration(
                                     labelText: 'Description',
                                     hintText: 'Enter event description (optional)',
@@ -637,7 +666,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   width: double.infinity,
                                   height: 56.0,
                                   child: ElevatedButton(
-                                    onPressed: _createEvent,
+                                    onPressed: _updateEvent,
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: Colors.blue.shade700,
                                       foregroundColor: Colors.white,
@@ -647,7 +676,29 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                       elevation: 2,
                                     ),
                                     child: Text(
-                                      'Create Event',
+                                      'Update Event',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 56.0,
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.of(context).pop(),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: Colors.blue.shade700,
+                                      side: BorderSide(color: Colors.blue.shade700),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    child: Text(
+                                      'Cancel',
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,
@@ -661,7 +712,19 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           ),
                         ),
                       ),
-                      SizedBox(height: 40),
+                      SizedBox(height: 24),
+                      
+                      // App info
+                      Padding(
+                        padding: EdgeInsets.only(bottom: 20),
+                        child: Text(
+                          'GoTask v1.0.0',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),

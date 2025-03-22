@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
-import 'package:gotask/calendar_page.dart';
+import 'package:gotask/Pages/calendar_page.dart';
+import 'package:gotask/Pages/create_event_page.dart';
+import 'package:gotask/Pages/edit_event_page.dart';
+import 'package:gotask/services/auth_service.dart';
 import 'package:intl/intl.dart';
-import 'auth_service.dart';
-import 'create_event_page.dart';
-import 'edit_event_page.dart';
 import 'view_event_page.dart';
 import 'profile_page.dart';
 
