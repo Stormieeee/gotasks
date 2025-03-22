@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:intl/intl.dart';
 import 'package:geocoding/geocoding.dart';
-import '../services/auth_service.dart';
-import '../Pages/home_Page.dart';
+import 'package:gotask/services/auth_service.dart';
 
 class CreateEventPage extends StatefulWidget {
   @override
