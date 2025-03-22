@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:gotask/feedback.dart';
 import 'package:gotask/home_Page.dart';
 import 'auth_service.dart';
-import 'home_Page.dart';
 
 class ProfilePage extends StatelessWidget {
   final AuthService _authService = AuthService();
@@ -127,7 +127,10 @@ class ProfilePage extends StatelessWidget {
                               title: Text('Send Feedback'),
                               trailing: Icon(Icons.chevron_right),
                               onTap: () {
-                                // Implement feedback functionality
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(builder: (context) => FeedbackPage(user: user)),
+                                  );
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(content: Text('Feedback feature coming soon'))
                                 );
