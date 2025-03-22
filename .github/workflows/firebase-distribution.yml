@@ -27,21 +27,32 @@ jobs:
       - name: Get Flutter dependencies
         run: flutter pub get
       
+      - name: Create Debug Keystore
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v -keystore ~/.android/debug.keystore \
+            -storepass android -alias androiddebugkey \
+            -keypass android -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+      
+      - name: Extract SHA1 Fingerprint
+        run: |
+          echo "Debug Keystore SHA1 Fingerprint:"
+          keytool -list -v -keystore ~/.android/debug.keystore -storepass android | grep SHA1
+      
       - name: Create Firebase Service Credentials file
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}' > firebase_credentials.json
       
-      # Initialize Gradle wrapper if needed
-      - name: Set up Gradle Wrapper
-        run: |
-          flutter build apk --debug --build-name=0.0.1 --build-number=1
-          
       - name: Build APK
         run: flutter build apk --release
-      
-      # Get signing information through Flutter
-      - name: Display Signing Information
-        run: flutter build apk --debug --verbose
           
+      - name: Extract Release Keystore SHA1
+        run: |
+          echo "Searching for release keystore..."
+          # Note: You'll need to replace this with your actual keystore path and credentials
+          # keytool -list -v -keystore /path/to/your/release.keystore -storepass YOUR_STOREPASS -alias YOUR_ALIAS | grep SHA1
+          echo "Note: Replace the above command with your actual release keystore command"
+      
       - name: Deploy to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
@@ -50,3 +61,9 @@ jobs:
           groups: testers  # Specify your tester groups
           file: build/app/outputs/flutter-apk/app-release.apk
           releaseNotes: "New release from GitHub Actions"
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f firebase_credentials.json
+          rm -f ~/.android/debug.keystore
