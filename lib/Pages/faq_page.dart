@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FAQPage extends StatefulWidget {
   const FAQPage({Key? key}) : super(key: key);
@@ -15,63 +16,17 @@ class _FAQPageState extends State<FAQPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
   
-  // List of FAQ items with questions and answers
-  final List<Map<String, String>> _faqItems = [
-    {
-      'question': 'How do I create a new event?',
-      'answer': 'To create a new event, go to the Calendar view and tap on the "+" floating action button. Fill in the event details such as title, description, date, time, and optional location. Tap "Create Event" to save your new event to your calendar.'
-    },
-    {
-      'question': 'Can I edit existing events?',
-      'answer': 'Yes, you can edit any event you\'ve created. Simply tap on the event in the Calendar view, then tap the "Edit" button. Make your changes in the edit form and tap "Update Event" to save your changes.'
-    },
-    {
-      'question': 'How do I connect my Google Calendar?',
-      'answer': 'GoTask automatically connects to your Google Calendar when you sign in with your Google account. All events you create in GoTask will sync with your Google Calendar, and events from Google Calendar will appear in GoTask.'
-    },
-    {
-      'question': 'Why do I need to sign in with Google?',
-      'answer': 'Signing in with Google allows GoTask to securely access your Google Calendar and provide seamless synchronization. This ensures your events are available across all your devices and in the Google Calendar app or website.'
-    },
-    {
-      'question': 'How do I send feedback or report a bug?',
-      'answer': 'To send feedback or report a bug, go to your Profile page and tap on "Send Feedback". Choose the type of feedback (suggestion, bug report, etc.), enter a subject and detailed message, then tap "Submit Feedback". Our team will review your feedback as soon as possible.'
-    },
-    {
-      'question': 'Is my data secure?',
-      'answer': 'Yes, GoTask takes data security seriously. We use Firebase Authentication for secure sign-in and all data is stored in Google\'s secure cloud infrastructure. Your calendar data is only accessible to you and anyone you\'ve explicitly shared your Google Calendar with.'
-    },
-    {
-      'question': 'How do I log out of the app?',
-      'answer': 'To log out, navigate to your Profile page and scroll down to find the "Sign Out" button. Tap it and confirm that you want to sign out. This will securely end your session and return you to the login screen.'
-    },
-    {
-      'question': 'Can I use GoTask offline?',
-      'answer': 'GoTask requires an internet connection for most features since it syncs with Google Calendar. However, once loaded, you can view your events offline. Creating or editing events requires an internet connection to ensure your changes sync properly.'
-    },
-    {
-      'question': 'How do I validate a location for an event?',
-      'answer': 'When creating or editing an event, enter a location in the location field. You can tap the search icon next to the field to validate that the location exists. GoTask will attempt to geocode the address and confirm if it\'s valid.'
-    },
-    {
-      'question': 'Does GoTask send notifications for events?',
-      'answer': 'Yes, GoTask can send you notifications for upcoming events. You can manage your notification preferences in the Settings page. By default, notifications follow your Google Calendar notification settings.'
-    },
-    {
-      'question': 'How can I view events by day, week, or month?',
-      'answer': 'In the Calendar view, you can switch between day, week, and month views using the tabs at the top of the screen. This allows you to choose the time frame that works best for your planning needs.'
-    },
-    {
-      'question': 'Can I share events with others?',
-      'answer': 'Currently, event sharing is handled through Google Calendar. Create your event in GoTask, and then use Google Calendar to invite others or share the event details.'
-    }
-  ];
+  // Loading and error states
+  bool _isLoading = true;
+  String _errorMessage = '';
+  
+  // List to store FAQ items from Firestore
+  List<Map<String, String>> _faqItems = [];
   
   @override
   void initState() {
     super.initState();
-    // Initialize all FAQ items as collapsed
-    _expandedList = List.generate(_faqItems.length, (index) => false);
+    _loadFAQsFromFirestore();
   }
   
   @override
@@ -79,6 +34,49 @@ class _FAQPageState extends State<FAQPage> {
     _searchController.dispose();
     super.dispose();
   }
+  
+  // Load FAQs from Firestore
+// Load FAQs from Firestore with detailed logging
+Future<void> _loadFAQsFromFirestore() async {
+  try {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+  
+    // Fetch FAQ documents from Firestore
+    final QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+        .collection('FAQ')
+        .get();
+
+    // Process query results
+    List<Map<String, String>> loadedFaqs = [];
+    
+    for (var doc in querySnapshot.docs) {
+      
+      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+      
+      // Extract question and answer fields from each document
+      loadedFaqs.add({
+        'question': data['question'] ?? 'No question provided',
+        'answer': data['answer'] ?? 'No answer provided',
+      });
+          }
+        
+    setState(() {
+      _faqItems = loadedFaqs;
+      _expandedList = List.generate(loadedFaqs.length, (index) => false);
+      _isLoading = false;
+    });
+    
+  } catch (e, stackTrace) {
+
+    setState(() {
+      _errorMessage = 'Failed to load FAQs: $e';
+      _isLoading = false;
+    });
+  }
+}
   
   // Filter FAQ items based on search query
   List<Map<String, String>> get _filteredFaqItems {
@@ -110,6 +108,13 @@ class _FAQPageState extends State<FAQPage> {
           icon: Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        actions: [
+          // Refresh button to reload FAQs
+          IconButton(
+            icon: Icon(Icons.refresh),
+            onPressed: _loadFAQsFromFirestore,
+          ),
+        ],
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -130,7 +135,7 @@ class _FAQPageState extends State<FAQPage> {
             },
             child: Column(
               children: [
-                // Header (made smaller to reduce space usage)
+                // Header
                 Padding(
                   padding: EdgeInsets.fromLTRB(20, 12, 20, 8),
                   child: Column(
@@ -202,92 +207,176 @@ class _FAQPageState extends State<FAQPage> {
                 
                 // FAQ List - Wrapped in Expanded + Flexible to handle keyboard
                 Flexible(
-                  child: _filteredFaqItems.isEmpty
+                  child: _isLoading 
                     ? Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.search_off,
-                              size: 60,
-                              color: Colors.grey.shade400,
-                            ),
-                            SizedBox(height: 12),
-                            Text(
-                              'No matching questions found',
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: Colors.grey.shade600,
-                              ),
-                            ),
-                            Text(
-                              'Try a different search term',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
+                        child: CircularProgressIndicator(
+                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                         ),
                       )
-                    : ListView.builder(
-                        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                        itemCount: _filteredFaqItems.length,
-                        itemBuilder: (context, index) {
-                          // Adjust the expanded state list if needed
-                          if (_expandedList.length <= index) {
-                            _expandedList.add(false);
-                          }
-                          
-                          return Card(
-                            margin: EdgeInsets.only(bottom: 8),
-                            elevation: 2,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ExpansionTile(
-                              initiallyExpanded: _expandedList[index],
-                              onExpansionChanged: (expanded) {
-                                setState(() {
-                                  _expandedList[index] = expanded;
-                                });
-                              },
-                              title: Text(
-                                _filteredFaqItems[index]['question']!,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.blue.shade800,
-                                  fontSize: 15,
-                                ),
-                              ),
-                              tilePadding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                              childrenPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-                              expandedCrossAxisAlignment: CrossAxisAlignment.start,
-                              trailing: Icon(
-                                _expandedList[index] ? Icons.remove : Icons.add,
-                                color: Colors.blue.shade700,
-                              ),
+                    : _errorMessage.isNotEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(20),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
                               children: [
+                                Icon(
+                                  Icons.error_outline,
+                                  size: 60,
+                                  color: Colors.red.shade300,
+                                ),
+                                SizedBox(height: 16),
                                 Text(
-                                  _filteredFaqItems[index]['answer']!,
+                                  'Error Loading FAQs',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.red.shade700,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  _errorMessage,
+                                  textAlign: TextAlign.center,
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: Colors.grey.shade800,
-                                    height: 1.4,
+                                    color: Colors.grey.shade700,
+                                  ),
+                                ),
+                                SizedBox(height: 20),
+                                ElevatedButton.icon(
+                                  onPressed: _loadFAQsFromFirestore,
+                                  icon: Icon(Icons.refresh),
+                                  label: Text('Try Again'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.blue.shade700,
+                                    foregroundColor: Colors.white,
                                   ),
                                 ),
                               ],
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        )
+                      : _faqItems.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.question_answer,
+                                  size: 60,
+                                  color: Colors.grey.shade400,
+                                ),
+                                SizedBox(height: 16),
+                                Text(
+                                  'No FAQs Found',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Please check back later',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey.shade500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : _filteredFaqItems.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.search_off,
+                                    size: 60,
+                                    color: Colors.grey.shade400,
+                                  ),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'No matching questions found',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      color: Colors.grey.shade600,
+                                    ),
+                                  ),
+                                  Text(
+                                    'Try a different search term',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.grey.shade500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : RefreshIndicator(
+                              onRefresh: _loadFAQsFromFirestore,
+                              color: Colors.blue.shade700,
+                              child: ListView.builder(
+                                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                                itemCount: _filteredFaqItems.length,
+                                itemBuilder: (context, index) {
+                                  // Adjust the expanded state list if needed
+                                  if (_expandedList.length <= index) {
+                                    _expandedList.add(false);
+                                  }
+                                  
+                                  return Card(
+                                    margin: EdgeInsets.only(bottom: 8),
+                                    elevation: 2,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: ExpansionTile(
+                                      initiallyExpanded: _expandedList[index],
+                                      onExpansionChanged: (expanded) {
+                                        setState(() {
+                                          _expandedList[index] = expanded;
+                                        });
+                                      },
+                                      title: Text(
+                                        _filteredFaqItems[index]['question']!,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blue.shade800,
+                                          fontSize: 15,
+                                        ),
+                                      ),
+                                      tilePadding: EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                      childrenPadding: EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                      expandedCrossAxisAlignment: CrossAxisAlignment.start,
+                                      trailing: Icon(
+                                        _expandedList[index] ? Icons.remove : Icons.add,
+                                        color: Colors.blue.shade700,
+                                      ),
+                                      children: [
+                                        Text(
+                                          _filteredFaqItems[index]['answer']!,
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            color: Colors.grey.shade800,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                 ),
                 
                 // Footer - Wrapped in Visibility to hide when keyboard is open
                 Visibility(
                   visible: MediaQuery.of(context).viewInsets.bottom == 0,
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: EdgeInsets.symmetric(horizontal:.20, vertical: 12),
                     child: Column(
                       children: [
                         Text(

@@ -275,7 +275,7 @@ class _EditEventPageState extends State<EditEventPage> {
         elevation: 0,
         backgroundColor: Colors.blue.shade800,
         title: Text(
-          'Edit Event',
+          'Edit Task/Event',
           style: TextStyle(
             fontWeight: FontWeight.bold,
           ),
@@ -309,7 +309,7 @@ class _EditEventPageState extends State<EditEventPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Edit Event',
+                              'Edit Task/Event',
                               style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -317,7 +317,7 @@ class _EditEventPageState extends State<EditEventPage> {
                               ),
                             ),
                             Text(
-                              'Update event details',
+                              'Update Task/Event details',
                               style: TextStyle(
                                 fontSize: 16,
                                 color: Colors.white.withOpacity(0.9),
@@ -373,7 +373,7 @@ class _EditEventPageState extends State<EditEventPage> {
                                 
                                 // Title Section
                                 Text(
-                                  'Event Details',
+                                  'Task/Event Details',
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,

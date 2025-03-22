@@ -73,8 +73,8 @@ class _CalendarPageState extends State<ListPage> {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete Event'),
-        content: Text('Are you sure you want to delete "${event.summary}"?'),
+        title: Text('Clear Task/Event'),
+        content: Text('Are you sure you want to clear this task "${event.summary}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -82,7 +82,7 @@ class _CalendarPageState extends State<ListPage> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text('DELETE'),
+            child: Text('CLEAR'),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
           ),
         ],
@@ -110,7 +110,7 @@ class _CalendarPageState extends State<ListPage> {
       await calendarApi.events.delete('primary', event.id!);
       
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Event deleted successfully')),
+        SnackBar(content: Text('Task cleared successfully')),
       );
       
       // Refresh the calendar
@@ -118,11 +118,11 @@ class _CalendarPageState extends State<ListPage> {
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Error deleting event: $e';
+        _errorMessage = 'Error clearing event: $e';
       });
       
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error deleting event')),
+        SnackBar(content: Text('Error clearing event')),
       );
     }
   }
@@ -157,7 +157,7 @@ class _CalendarPageState extends State<ListPage> {
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _fetchCalendarEvents,
-            tooltip: 'Refresh Events',
+            tooltip: 'Refresh Tasks/Events',
           ),
           IconButton(
             icon: Icon(Icons.account_circle),
@@ -197,7 +197,7 @@ class _CalendarPageState extends State<ListPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Upcoming Events',
+                      'Upcoming Tasks/Events',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -274,7 +274,7 @@ class _CalendarPageState extends State<ListPage> {
                                 ),
                                 SizedBox(height: 8),
                                 Text(
-                                  'Tap the + button to create a new event',
+                                  'Tap the + button to create a new Task/Event',
                                   style: TextStyle(
                                     fontSize: 16,
                                     color: Colors.blue.shade600,
@@ -365,7 +365,7 @@ class _CalendarPageState extends State<ListPage> {
                                                     ),
                                                   ),
                                                   title: Text(
-                                                    event.summary ?? 'Untitled Event',
+                                                    event.summary ?? 'Untitled Task',
                                                     style: TextStyle(
                                                       fontWeight: FontWeight.bold,
                                                       fontSize: 16,
@@ -454,7 +454,7 @@ class _CalendarPageState extends State<ListPage> {
                                                         Icons.delete_outline,
                                                         size: 18,
                                                       ),
-                                                      label: Text('Delete'),
+                                                      label: Text('Clear'),
                                                       style: TextButton.styleFrom(
                                                         foregroundColor: Colors.red,
                                                       ),
@@ -515,7 +515,7 @@ class _CalendarPageState extends State<ListPage> {
           }
         },
         child: Icon(Icons.add),
-        tooltip: 'Add Event',
+        tooltip: 'Add Task',
       ),
     );
   }

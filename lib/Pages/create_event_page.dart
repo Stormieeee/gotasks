@@ -3,6 +3,7 @@ import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:intl/intl.dart';
 import 'package:geocoding/geocoding.dart';
 import '../services/auth_service.dart';
+import '../Pages/home_Page.dart';
 
 class CreateEventPage extends StatefulWidget {
   @override
@@ -23,6 +24,10 @@ class _CreateEventPageState extends State<CreateEventPage> {
     DateTime.now().add(Duration(hours: 1))
   );
   String _location = '';
+  
+  // Recurrence options
+  bool _isRecurring = false;
+  String _recurrencePattern = 'none'; // none, daily, weekly, monthly, yearly
   
   bool _isLoading = false;
   bool _isValidatingLocation = false;
@@ -166,6 +171,39 @@ class _CreateEventPageState extends State<CreateEventPage> {
     }
   }
 
+  // Function to handle creating recurring events
+  calendar.Event _prepareEventWithRecurrence(calendar.Event event) {
+    if (!_isRecurring || _recurrencePattern == 'none') {
+      return event;
+    }
+    
+    List<String> recurrence = [];
+    
+    // Set up the recurrence rule based on selected pattern
+    switch (_recurrencePattern) {
+      case 'daily':
+        recurrence.add('RRULE:FREQ=DAILY');
+        break;
+      case 'weekly':
+        // Get the day of the week for the start date (SU, MO, TU, etc.)
+        final days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+        final dayOfWeek = days[_startDate.weekday % 7]; // Convert to RRULE day format
+        recurrence.add('RRULE:FREQ=WEEKLY;BYDAY=$dayOfWeek');
+        break;
+      case 'monthly':
+        // Repeat on the same day of the month
+        recurrence.add('RRULE:FREQ=MONTHLY;BYMONTHDAY=${_startDate.day}');
+        break;
+      case 'yearly':
+        // Repeat on the same day of the same month each year
+        recurrence.add('RRULE:FREQ=YEARLY');
+        break;
+    }
+    
+    event.recurrence = recurrence;
+    return event;
+  }
+
   Future<void> _createEvent() async {
     if (!_formKey.currentState!.validate()) {
       return;
@@ -219,6 +257,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
         event.location = _location;
       }
       
+      // Add recurrence if needed
+      event = _prepareEventWithRecurrence(event);
+      
       await calendarApi.events.insert(event, 'primary');
       
       setState(() {
@@ -227,7 +268,9 @@ class _CreateEventPageState extends State<CreateEventPage> {
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Event created successfully!'),
+          content: Text(_isRecurring 
+            ? 'Recurring Task created successfully!' 
+            : 'Task created successfully!'),
           backgroundColor: Colors.green.shade600,
         ),
       );
@@ -236,7 +279,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Error creating event: $e';
+        _errorMessage = 'Error creating Task: $e';
       });
     }
   }
@@ -248,7 +291,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
         elevation: 0,
         backgroundColor: Colors.blue.shade800,
         title: Text(
-          'Create Event',
+          'Create Task/Event',
           style: TextStyle(
             fontWeight: FontWeight.bold,
           ),
@@ -282,7 +325,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'New Event',
+                              'New Task/Event',
                               style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -346,7 +389,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                 
                                 // Title Section
                                 Text(
-                                  'Event Details',
+                                  'Task Details',
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -565,6 +608,122 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                 
                                 SizedBox(height: 32),
                                 
+                                // Recurrence Section
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Recurrence',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blue.shade800,
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Switch(
+                                      value: _isRecurring,
+                                      onChanged: (value) {
+                                        setState(() {
+                                          _isRecurring = value;
+                                          if (!value) {
+                                            _recurrencePattern = 'none';
+                                          } else if (_recurrencePattern == 'none') {
+                                            _recurrencePattern = 'daily';
+                                          }
+                                        });
+                                      },
+                                      activeColor: Colors.blue.shade700,
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
+                                
+                                // Recurrence options (only show when recurring is enabled)
+                                if (_isRecurring)
+                                  Container(
+                                    padding: EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blue.shade50.withOpacity(0.5),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.blue.shade100),
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Repeat Pattern',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: Colors.blue.shade800,
+                                          ),
+                                        ),
+                                        SizedBox(height: 12),
+                                        
+                                        // Daily option
+                                        RadioListTile<String>(
+                                          title: Text('Every day'),
+                                          value: 'daily',
+                                          groupValue: _recurrencePattern,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _recurrencePattern = value!;
+                                            });
+                                          },
+                                          activeColor: Colors.blue.shade700,
+                                          contentPadding: EdgeInsets.zero,
+                                          dense: true,
+                                        ),
+                                        
+                                        // Weekly option
+                                        RadioListTile<String>(
+                                          title: Text('Weekly on ${DateFormat('EEEE').format(_startDate)}'),
+                                          value: 'weekly',
+                                          groupValue: _recurrencePattern,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _recurrencePattern = value!;
+                                            });
+                                          },
+                                          activeColor: Colors.blue.shade700,
+                                          contentPadding: EdgeInsets.zero,
+                                          dense: true,
+                                        ),
+                                        
+                                        // Monthly option
+                                        RadioListTile<String>(
+                                          title: Text('Monthly on day ${_startDate.day}'),
+                                          value: 'monthly',
+                                          groupValue: _recurrencePattern,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _recurrencePattern = value!;
+                                            });
+                                          },
+                                          activeColor: Colors.blue.shade700,
+                                          contentPadding: EdgeInsets.zero,
+                                          dense: true,
+                                        ),
+                                        
+                                        // Yearly option
+                                        RadioListTile<String>(
+                                          title: Text('Yearly on ${DateFormat('MMMM d').format(_startDate)}'),
+                                          value: 'yearly',
+                                          groupValue: _recurrencePattern,
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _recurrencePattern = value!;
+                                            });
+                                          },
+                                          activeColor: Colors.blue.shade700,
+                                          contentPadding: EdgeInsets.zero,
+                                          dense: true,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                
+                                SizedBox(height: 32),
+                                
                                 // Location Section
                                 Text(
                                   'Location (Optional)',
@@ -647,7 +806,7 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                       elevation: 2,
                                     ),
                                     child: Text(
-                                      'Create Event',
+                                      _isRecurring ? 'Create Recurring Task' : 'Create Task/Event',
                                       style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.bold,

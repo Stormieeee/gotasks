@@ -102,8 +102,8 @@ class _CalendarPageState extends State<CalendarPage> {
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Delete Event'),
-        content: Text('Are you sure you want to delete "${event.summary}"?'),
+        title: Text('Clear Task'),
+        content: Text('Are you sure you want to clear this task "${event.summary}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -139,7 +139,7 @@ class _CalendarPageState extends State<CalendarPage> {
       await calendarApi.events.delete('primary', event.id!);
       
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Event deleted successfully')),
+        SnackBar(content: Text('Task successfully cleared')),
       );
       
       // Refresh the calendar
@@ -147,7 +147,7 @@ class _CalendarPageState extends State<CalendarPage> {
     } catch (e) {
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Error deleting event: $e';
+        _errorMessage = 'Error clearing task: $e';
       });
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -186,7 +186,7 @@ class _CalendarPageState extends State<CalendarPage> {
           IconButton(
             icon: Icon(Icons.refresh),
             onPressed: _fetchCalendarEvents,
-            tooltip: 'Refresh Events',
+            tooltip: 'Refresh Tasks/Events',
           ),
           IconButton(
             icon: Icon(Icons.account_circle),
@@ -226,7 +226,7 @@ class _CalendarPageState extends State<CalendarPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Calendar View',
+                      'Upcoming Tasks/Events',
                       style: TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -367,7 +367,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                     ),
                                     SizedBox(width: 8),
                                     Text(
-                                      'Events for ${DateFormat('MMM d, yyyy').format(_selectedDay)}',
+                                      'Tasks/Events for ${DateFormat('MMM d, yyyy').format(_selectedDay)}',
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 16,
@@ -392,7 +392,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                             ),
                                             SizedBox(height: 16),
                                             Text(
-                                              'No events for this day',
+                                              'No Tasks/Events for this day',
                                               style: TextStyle(
                                                 fontSize: 18,
                                                 color: Colors.blue.shade700,
@@ -400,7 +400,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                             ),
                                             SizedBox(height: 8),
                                             Text(
-                                              'Tap the + button to add an event',
+                                              'Tap the + button to add an Task/Event',
                                               style: TextStyle(
                                                 fontSize: 14,
                                                 color: Colors.grey.shade600,
@@ -450,7 +450,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                                     ),
                                                   ),
                                                   title: Text(
-                                                    event.summary ?? 'Untitled Event',
+                                                    event.summary ?? 'Untitled Task/Event',
                                                     style: TextStyle(
                                                       fontWeight: FontWeight.bold,
                                                       fontSize: 16,
@@ -524,7 +524,7 @@ class _CalendarPageState extends State<CalendarPage> {
         ),
       ),
       floatingActionButton: FloatingActionButton(
-        heroTag: "addEvent",
+        heroTag: "addTask",
         backgroundColor: Colors.blue.shade700,
         onPressed: () async {
           final result = await Navigator.push(
@@ -539,7 +539,7 @@ class _CalendarPageState extends State<CalendarPage> {
           }
         },
         child: Icon(Icons.add),
-        tooltip: 'Add Event',
+        tooltip: 'Add Task',
       ),
     );
   }
