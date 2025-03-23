@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:developer' as developer;
+import 'package:gotask/services/cloud_logger.dart';
 
 class FeedbackPage extends StatefulWidget {
   final User user;
@@ -34,15 +35,35 @@ class _FeedbackPageState extends State<FeedbackPage> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    CloudLogger().pageView('FeedbackPage', {
+      'userId': widget.user.uid,
+      'userEmail': widget.user.email,
+      'source': 'initState'
+    });
+  }
+
+  @override
   void dispose() {
     _subjectController.dispose();
     _messageController.dispose();
+    CloudLogger().debug('FeedbackPage disposed', {
+      'eventType': 'PAGE_LIFECYCLE',
+      'action': 'PAGE_DISPOSED',
+      'userId': widget.user.uid
+    });
     super.dispose();
   }
 
   // Log a message and update test results
   void _log(String message) {
     developer.log(message, name: 'FIRESTORE_TEST');
+    CloudLogger().debug('Firestore test log', {
+      'eventType': 'FIRESTORE_TEST',
+      'message': message,
+      'userId': widget.user.uid
+    });
     setState(() {
       _testResult = '$message\n$_testResult';
     });
@@ -50,10 +71,17 @@ class _FeedbackPageState extends State<FeedbackPage> {
 
   // Test Firestore connection
   Future<void> _testFirestoreConnection() async {
+    CloudLogger().userAction('firestore_test_started', {
+      'source': 'FeedbackPage',
+      'userId': widget.user.uid
+    });
+    
     setState(() {
       _isTestingFirestore = true;
       _testResult = '';
     });
+    
+    final stopwatch = Stopwatch()..start();
     
     try {
       _log('Testing Firestore connection...');
@@ -76,8 +104,28 @@ class _FeedbackPageState extends State<FeedbackPage> {
       _log('SUCCESS! Test document written with ID: ${docRef.id}');
       _log('Firestore connection is working correctly!');
       
+      stopwatch.stop();
+      CloudLogger().info('Firestore test completed successfully', {
+        'eventType': 'FIRESTORE_TEST',
+        'action': 'TEST_COMPLETED',
+        'success': true,
+        'documentId': docRef.id,
+        'durationMs': stopwatch.elapsedMilliseconds,
+        'userId': widget.user.uid
+      });
+      
     } catch (e) {
+      stopwatch.stop();
       _log('ERROR: $e');
+      
+      CloudLogger().error('Firestore test failed', {
+        'eventType': 'FIRESTORE_TEST',
+        'action': 'TEST_ERROR',
+        'error': e.toString(),
+        'errorType': e.runtimeType.toString(),
+        'durationMs': stopwatch.elapsedMilliseconds,
+        'userId': widget.user.uid
+      });
     } finally {
       setState(() {
         _isTestingFirestore = false;
@@ -86,7 +134,22 @@ class _FeedbackPageState extends State<FeedbackPage> {
   }
 
   Future<void> _submitFeedback() async {
+    CloudLogger().userAction('submit_feedback_button_tapped', {
+      'feedbackType': _feedbackType,
+      'subjectLength': _subjectController.text.length,
+      'messageLength': _messageController.text.length,
+      'userId': widget.user.uid
+    });
+    
     if (!_formKey.currentState!.validate()) {
+      CloudLogger().warn('Feedback validation failed', {
+        'eventType': 'FORM_VALIDATION',
+        'action': 'VALIDATION_FAILED',
+        'userId': widget.user.uid,
+        'subjectLength': _subjectController.text.length,
+        'messageLength': _messageController.text.length,
+        'feedbackType': _feedbackType
+      });
       return;
     }
     
@@ -95,13 +158,23 @@ class _FeedbackPageState extends State<FeedbackPage> {
       _errorMessage = '';
     });
     
+    final stopwatch = Stopwatch()..start();
+    CloudLogger().info('Submitting feedback', {
+      'eventType': 'FEEDBACK_SUBMISSION',
+      'action': 'SUBMISSION_STARTED',
+      'feedbackType': _feedbackType,
+      'subjectLength': _subjectController.text.length,
+      'messageLength': _messageController.text.length,
+      'userId': widget.user.uid
+    });
+    
     try {
       // Get form data
       final String subject = _subjectController.text.trim();
       final String message = _messageController.text.trim();
       
       // Save to Firestore
-      await FirebaseFirestore.instance.collection('feedback').add({
+      final DocumentReference docRef = await FirebaseFirestore.instance.collection('feedback').add({
         'userId': widget.user.uid,
         'userEmail': widget.user.email,
         'userName': widget.user.displayName,
@@ -115,6 +188,16 @@ class _FeedbackPageState extends State<FeedbackPage> {
       setState(() {
         _isLoading = false;
         _isSent = true;
+      });
+      
+      stopwatch.stop();
+      CloudLogger().info('Feedback submitted successfully', {
+        'eventType': 'FEEDBACK_SUBMISSION',
+        'action': 'SUBMISSION_COMPLETED',
+        'feedbackType': _feedbackType,
+        'documentId': docRef.id,
+        'durationMs': stopwatch.elapsedMilliseconds,
+        'userId': widget.user.uid
       });
       
       // Reset form
@@ -135,6 +218,17 @@ class _FeedbackPageState extends State<FeedbackPage> {
       setState(() {
         _isLoading = false;
         _errorMessage = 'Error submitting feedback: $e';
+      });
+      
+      stopwatch.stop();
+      CloudLogger().error('Error submitting feedback', {
+        'eventType': 'FEEDBACK_SUBMISSION',
+        'action': 'SUBMISSION_ERROR',
+        'feedbackType': _feedbackType,
+        'error': e.toString(),
+        'errorType': e.runtimeType.toString(),
+        'durationMs': stopwatch.elapsedMilliseconds,
+        'userId': widget.user.uid
       });
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -160,13 +254,24 @@ class _FeedbackPageState extends State<FeedbackPage> {
         ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            CloudLogger().userAction('feedback_back_button_pressed', {
+              'wasSent': _isSent,
+              'userId': widget.user.uid
+            });
+            Navigator.of(context).pop();
+          },
         ),
         actions: [
           // Debug test button in the app bar
           IconButton(
             icon: Icon(Icons.bug_report),
             onPressed: () {
+              CloudLogger().userAction('firestore_test_button_pressed', {
+                'source': 'AppBar',
+                'userId': widget.user.uid
+              });
+              
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
@@ -211,7 +316,12 @@ class _FeedbackPageState extends State<FeedbackPage> {
                   ),
                   actions: [
                     TextButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () {
+                        CloudLogger().userAction('firestore_test_dialog_closed', {
+                          'userId': widget.user.uid
+                        });
+                        Navigator.pop(context);
+                      },
                       child: Text('Close'),
                     ),
                   ],
@@ -248,135 +358,145 @@ class _FeedbackPageState extends State<FeedbackPage> {
   }
   
   Widget _buildSuccessView() {
-  return Container(
-    width: double.infinity,
-    height: double.infinity,
-    child: SingleChildScrollView(
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: MediaQuery.of(context).size.height - AppBar().preferredSize.height - MediaQuery.of(context).padding.top,
-        ),
-        child: IntrinsicHeight(
-          child: Padding(
-            padding: EdgeInsets.all(20),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(height: 40),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: CircleAvatar(
-                    radius: 60,
-                    backgroundColor: Colors.green.shade100,
-                    child: Icon(
-                      Icons.check,
-                      size: 80,
-                      color: Colors.green.shade600,
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      child: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: MediaQuery.of(context).size.height - AppBar().preferredSize.height - MediaQuery.of(context).padding.top,
+          ),
+          child: IntrinsicHeight(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  SizedBox(height: 40),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: Offset(0, 5),
+                        ),
+                      ],
                     ),
-                  ),
-                ),
-                SizedBox(height: 30),
-                Text(
-                  'Thank You!',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue.shade800,
-                  ),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  'Your feedback has been submitted successfully.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.blue.shade800,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  'We appreciate your input and will review it soon.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey.shade700,
-                  ),
-                ),
-                Spacer(flex: 1),
-                SizedBox(
-                  width: double.infinity,
-                  height: 56.0,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _isSent = false;
-                      });
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade700,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 2,
-                    ),
-                    child: Text(
-                      'Send Another Feedback',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                    child: CircleAvatar(
+                      radius: 60,
+                      backgroundColor: Colors.green.shade100,
+                      child: Icon(
+                        Icons.check,
+                        size: 80,
+                        color: Colors.green.shade600,
                       ),
                     ),
                   ),
-                ),
-                SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  height: 56.0,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.blue.shade700,
-                      side: BorderSide(color: Colors.blue.shade700),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
+                  SizedBox(height: 30),
+                  Text(
+                    'Thank You!',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue.shade800,
                     ),
-                    child: Text(
-                      'Return to Profile',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Your feedback has been submitted successfully.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.blue.shade800,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'We appreciate your input and will review it soon.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  Spacer(flex: 1),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56.0,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        CloudLogger().userAction('send_another_feedback_button_pressed', {
+                          'userId': widget.user.uid
+                        });
+                        
+                        setState(() {
+                          _isSent = false;
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade700,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        elevation: 2,
+                      ),
+                      child: Text(
+                        'Send Another Feedback',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                SizedBox(height: 40),
-                Text(
-                  'GoTask v1.0.0',
-                  style: TextStyle(
-                    color: Colors.black.withOpacity(0.6),
-                    fontSize: 12,
+                  SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56.0,
+                    child: OutlinedButton(
+                      onPressed: () {
+                        CloudLogger().userAction('return_to_profile_button_pressed', {
+                          'fromSuccessScreen': true,
+                          'userId': widget.user.uid
+                        });
+                        Navigator.of(context).pop();
+                      },
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.blue.shade700,
+                        side: BorderSide(color: Colors.blue.shade700),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        'Return to Profile',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
-              ],
+                  SizedBox(height: 40),
+                  Text(
+                    'GoTask v1.0.0',
+                    style: TextStyle(
+                      color: Colors.black.withOpacity(0.6),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   Widget _buildFeedbackForm() {
     return SingleChildScrollView(
@@ -485,6 +605,12 @@ class _FeedbackPageState extends State<FeedbackPage> {
                           }).toList(),
                           onChanged: (String? newValue) {
                             if (newValue != null) {
+                              CloudLogger().userAction('feedback_type_changed', {
+                                'previousType': _feedbackType,
+                                'newType': newValue,
+                                'userId': widget.user.uid
+                              });
+                              
                               setState(() {
                                 _feedbackType = newValue;
                               });
@@ -524,9 +650,26 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
+                          CloudLogger().warn('Subject validation failed', {
+                            'eventType': 'FORM_VALIDATION',
+                            'field': 'subject',
+                            'reason': 'EMPTY_FIELD',
+                            'userId': widget.user.uid
+                          });
                           return 'Please enter a subject';
                         }
                         return null;
+                      },
+                      onChanged: (value) {
+                        // Log only when significant changes occur to reduce noise
+                        if (value.length == 10 || value.length % 20 == 0) {
+                          CloudLogger().debug('Subject input updated', {
+                            'eventType': 'FORM_INPUT',
+                            'field': 'subject',
+                            'length': value.length,
+                            'userId': widget.user.uid
+                          });
+                        }
                       },
                     ),
                     
@@ -561,12 +704,36 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       maxLines: 6,
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
+                          CloudLogger().warn('Message validation failed', {
+                            'eventType': 'FORM_VALIDATION',
+                            'field': 'message',
+                            'reason': 'EMPTY_FIELD',
+                            'userId': widget.user.uid
+                          });
                           return 'Please enter your feedback';
                         }
                         if (value.trim().length < 10) {
+                          CloudLogger().warn('Message validation failed', {
+                            'eventType': 'FORM_VALIDATION',
+                            'field': 'message',
+                            'reason': 'TOO_SHORT',
+                            'length': value.trim().length,
+                            'userId': widget.user.uid
+                          });
                           return 'Please provide more details (at least 10 characters)';
                         }
                         return null;
+                      },
+                      onChanged: (value) {
+                        // Log only when significant changes occur to reduce noise
+                        if (value.length == 20 || value.length % 50 == 0) {
+                          CloudLogger().debug('Message input updated', {
+                            'eventType': 'FORM_INPUT',
+                            'field': 'message',
+                            'length': value.length,
+                            'userId': widget.user.uid
+                          });
+                        }
                       },
                     ),
                     
@@ -607,7 +774,15 @@ class _FeedbackPageState extends State<FeedbackPage> {
                       width: double.infinity,
                       height: 56.0,
                       child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
+                        onPressed: () {
+                          CloudLogger().userAction('feedback_cancelled', {
+                            'feedbackType': _feedbackType,
+                            'subjectFilled': _subjectController.text.isNotEmpty,
+                            'messageFilled': _messageController.text.isNotEmpty,
+                            'userId': widget.user.uid
+                          });
+                          Navigator.of(context).pop();
+                        },
                         style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.blue.shade700,
                           side: BorderSide(color: Colors.blue.shade700),

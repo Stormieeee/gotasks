@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:gotask/Pages/list_page.dart';
 import 'package:gotask/services/auth_service.dart';
+import 'package:gotask/services/cloud_logger.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.title});
@@ -19,18 +20,63 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    
+    CloudLogger().pageView('HomePage', {
+      'source': 'initState',
+      'isAuthenticated': _user != null
+    });
+    
     _authService.authStateChanges.listen((User? user) {
+      final bool wasSignedIn = _user != null;
+      final bool isNowSignedIn = user != null;
+      
+      // Track auth state changes
+      if (!wasSignedIn && isNowSignedIn) {
+        CloudLogger().info('User signed in', {
+          'eventType': 'AUTH_STATE',
+          'action': 'SIGN_IN_COMPLETED',
+          'userId': user!.uid,
+          'email': user.email,
+          'displayName': user.displayName,
+          'provider': user.providerData.isNotEmpty ? user.providerData[0].providerId : 'unknown'
+        });
+      } else if (wasSignedIn && !isNowSignedIn) {
+        CloudLogger().info('User signed out', {
+          'eventType': 'AUTH_STATE',
+          'action': 'SIGN_OUT_COMPLETED',
+          'previousUserId': _user!.uid
+        });
+      }
+      
       setState(() {
         _user = user;
       });
       
       // If user just logged in, navigate to List Page
       if (user != null && mounted) {
+        CloudLogger().info('Navigating to List Page after sign in', {
+          'eventType': 'NAVIGATION',
+          'action': 'AUTO_NAVIGATE_AFTER_SIGN_IN',
+          'destination': 'ListPage',
+          'userId': user.uid
+        });
+        
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => ListPage()),
         );
       }
     });
+  }
+
+  @override
+  void dispose() {
+    CloudLogger().debug('HomePage disposed', {
+      'eventType': 'PAGE_LIFECYCLE',
+      'action': 'PAGE_DISPOSED',
+      'isAuthenticated': _user != null,
+      'userId': _user?.uid
+    });
+    super.dispose();
   }
 
   @override
@@ -129,13 +175,57 @@ class _HomePageState extends State<HomePage> {
                                     ),
                                   ),
                                   onPressed: () async {
+                                    CloudLogger().userAction('google_sign_in_button_tapped', {
+                                      'eventType': 'AUTH_FLOW',
+                                      'action': 'SIGN_IN_INITIATED',
+                                      'method': 'google'
+                                    });
+                                    
                                     setState(() {
                                       _isLoading = true;
                                     });
-                                    await _authService.signInWithGoogle();
-                                    setState(() {
-                                      _isLoading = false;
-                                    });
+                                    
+                                    final stopwatch = Stopwatch()..start();
+                                    
+                                    try {
+                                      final userCredential = await _authService.signInWithGoogle();
+                                      
+                                      stopwatch.stop();
+                                      
+                                      if (userCredential != null) {
+                                        CloudLogger().info('Google sign-in successful', {
+                                          'eventType': 'AUTH_FLOW',
+                                          'action': 'SIGN_IN_SUCCESS',
+                                          'method': 'google',
+                                          'userId': userCredential.user?.uid,
+                                          'isNewUser': userCredential.additionalUserInfo?.isNewUser,
+                                          'durationMs': stopwatch.elapsedMilliseconds
+                                        });
+                                      } else {
+                                        // User canceled sign-in
+                                        CloudLogger().info('Google sign-in cancelled by user', {
+                                          'eventType': 'AUTH_FLOW',
+                                          'action': 'SIGN_IN_CANCELLED',
+                                          'method': 'google',
+                                          'durationMs': stopwatch.elapsedMilliseconds
+                                        });
+                                      }
+                                    } catch (e) {
+                                      stopwatch.stop();
+                                      
+                                      CloudLogger().error('Google sign-in failed', {
+                                        'eventType': 'AUTH_FLOW',
+                                        'action': 'SIGN_IN_ERROR',
+                                        'method': 'google',
+                                        'error': e.toString(),
+                                        'errorType': e.runtimeType.toString(),
+                                        'durationMs': stopwatch.elapsedMilliseconds
+                                      });
+                                    } finally {
+                                      setState(() {
+                                        _isLoading = false;
+                                      });
+                                    }
                                   },
                                 ),
                         ],
@@ -223,6 +313,14 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     onPressed: () {
+                      CloudLogger().userAction('go_to_calendar_button_tapped', {
+                        'eventType': 'NAVIGATION',
+                        'action': 'MANUAL_NAVIGATE',
+                        'source': 'ProfileScreen',
+                        'destination': 'ListPage',
+                        'userId': _user!.uid
+                      });
+                      
                       Navigator.of(context).pushReplacement(
                         MaterialPageRoute(builder: (context) => ListPage()),
                       );
@@ -241,7 +339,37 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     onPressed: () async {
-                      await _authService.signOut();
+                      CloudLogger().userAction('sign_out_button_tapped', {
+                        'eventType': 'AUTH_FLOW',
+                        'action': 'SIGN_OUT_INITIATED',
+                        'userId': _user!.uid
+                      });
+                      
+                      final stopwatch = Stopwatch()..start();
+                      
+                      try {
+                        await _authService.signOut();
+                        
+                        stopwatch.stop();
+                        
+                        CloudLogger().info('Sign out successful', {
+                          'eventType': 'AUTH_FLOW',
+                          'action': 'SIGN_OUT_SUCCESS',
+                          'previousUserId': _user!.uid,
+                          'durationMs': stopwatch.elapsedMilliseconds
+                        });
+                      } catch (e) {
+                        stopwatch.stop();
+                        
+                        CloudLogger().error('Sign out failed', {
+                          'eventType': 'AUTH_FLOW',
+                          'action': 'SIGN_OUT_ERROR',
+                          'userId': _user!.uid,
+                          'error': e.toString(),
+                          'errorType': e.runtimeType.toString(),
+                          'durationMs': stopwatch.elapsedMilliseconds
+                        });
+                      }
                     },
                   ),
                 ],

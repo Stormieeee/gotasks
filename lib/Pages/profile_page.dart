@@ -4,12 +4,38 @@ import 'package:gotask/Pages/faq_page.dart';
 import 'package:gotask/Pages/feedback.dart';
 import 'package:gotask/Pages/home_Page.dart';
 import 'package:gotask/services/auth_service.dart';
+import 'package:gotask/services/cloud_logger.dart';
 
-class ProfilePage extends StatelessWidget {
-  final AuthService _authService = AuthService();
+class ProfilePage extends StatefulWidget {
   final User user;
 
   ProfilePage({required this.user});
+
+  @override
+  _ProfilePageState createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  final AuthService _authService = AuthService();
+
+  @override
+  void initState() {
+    super.initState();
+    CloudLogger().pageView('ProfilePage', {
+      'userId': widget.user.uid,
+      'userEmail': widget.user.email,
+    });
+  }
+
+  @override
+  void dispose() {
+    CloudLogger().debug('ProfilePage disposed', {
+      'eventType': 'PAGE_LIFECYCLE',
+      'action': 'PAGE_DISPOSED',
+      'userId': widget.user.uid
+    });
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,6 +44,15 @@ class ProfilePage extends StatelessWidget {
         elevation: 0,
         backgroundColor: Colors.blue.shade800,
         title: Text('My Profile'),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () {
+            CloudLogger().userAction('profile_back_button_pressed', {
+              'userId': widget.user.uid
+            });
+            Navigator.of(context).pop();
+          },
+        ),
       ),
       body: Container(
         decoration: BoxDecoration(
@@ -51,11 +86,11 @@ class ProfilePage extends StatelessWidget {
                             CircleAvatar(
                               radius: 60,
                               backgroundImage: 
-                                user.photoURL != null
-                                  ? NetworkImage(user.photoURL!)
+                                widget.user.photoURL != null
+                                  ? NetworkImage(widget.user.photoURL!)
                                   : null,
                               backgroundColor: Colors.grey.shade200,
-                              child: user.photoURL == null
+                              child: widget.user.photoURL == null
                                 ? Icon(
                                     Icons.person,
                                     size: 60,
@@ -68,7 +103,7 @@ class ProfilePage extends StatelessWidget {
                             
                             // User name
                             Text(
-                              user.displayName ?? 'User',
+                              widget.user.displayName ?? 'User',
                               style: TextStyle(
                                 fontSize: 24,
                                 fontWeight: FontWeight.bold,
@@ -79,7 +114,7 @@ class ProfilePage extends StatelessWidget {
                             // User email
                             SizedBox(height: 8),
                             Text(
-                              user.email ?? '',
+                              widget.user.email ?? '',
                               style: TextStyle(
                                 fontSize: 16,
                                 color: Colors.grey.shade700,
@@ -128,10 +163,20 @@ class ProfilePage extends StatelessWidget {
                               title: Text('Send Feedback'),
                               trailing: Icon(Icons.chevron_right),
                               onTap: () {
+                                CloudLogger().userAction('navigate_to_feedback', {
+                                  'source': 'ProfilePage',
+                                  'userId': widget.user.uid
+                                });
+                                
                                 Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => FeedbackPage(user: user)),
-                                  );
+                                  context,
+                                  MaterialPageRoute(builder: (context) => FeedbackPage(user: widget.user)),
+                                ).then((_) {
+                                  CloudLogger().pageView('ProfilePage', {
+                                    'returnedFrom': 'FeedbackPage',
+                                    'userId': widget.user.uid
+                                  });
+                                });
                               },
                             ),
                             
@@ -140,10 +185,20 @@ class ProfilePage extends StatelessWidget {
                               title: Text('Frequently Asked Questions'),
                               trailing: Icon(Icons.chevron_right),
                               onTap: () {
+                                CloudLogger().userAction('navigate_to_faq', {
+                                  'source': 'ProfilePage',
+                                  'userId': widget.user.uid
+                                });
+                                
                                 Navigator.push(
-                                    context,
-                                    MaterialPageRoute(builder: (context) => FAQPage()),
-                                  );
+                                  context,
+                                  MaterialPageRoute(builder: (context) => FAQPage()),
+                                ).then((_) {
+                                  CloudLogger().pageView('ProfilePage', {
+                                    'returnedFrom': 'FAQPage',
+                                    'userId': widget.user.uid
+                                  });
+                                });
                               },
                             ),
                             
@@ -152,6 +207,11 @@ class ProfilePage extends StatelessWidget {
                               title: Text('About'),
                               trailing: Icon(Icons.chevron_right),
                               onTap: () {
+                                CloudLogger().userAction('open_about_dialog', {
+                                  'source': 'ProfilePage',
+                                  'userId': widget.user.uid
+                                });
+                                
                                 // Show about dialog
                                 showAboutDialog(
                                   context: context,
@@ -180,6 +240,11 @@ class ProfilePage extends StatelessWidget {
                                 ),
                               ),
                               onTap: () async {
+                                CloudLogger().userAction('sign_out_button_tapped', {
+                                  'source': 'ProfilePage',
+                                  'userId': widget.user.uid
+                                });
+                                
                                 // Show confirmation dialog
                                 bool confirm = await showDialog(
                                   context: context,
@@ -188,11 +253,21 @@ class ProfilePage extends StatelessWidget {
                                     content: Text('Are you sure you want to sign out?'),
                                     actions: [
                                       TextButton(
-                                        onPressed: () => Navigator.of(context).pop(false),
+                                        onPressed: () {
+                                          CloudLogger().userAction('sign_out_cancelled', {
+                                            'userId': widget.user.uid
+                                          });
+                                          Navigator.of(context).pop(false);
+                                        },
                                         child: Text('CANCEL'),
                                       ),
                                       TextButton(
-                                        onPressed: () => Navigator.of(context).pop(true),
+                                        onPressed: () {
+                                          CloudLogger().userAction('sign_out_confirmed', {
+                                            'userId': widget.user.uid
+                                          });
+                                          Navigator.of(context).pop(true);
+                                        },
                                         child: Text('SIGN OUT'),
                                         style: TextButton.styleFrom(foregroundColor: Colors.red),
                                       ),
@@ -201,12 +276,52 @@ class ProfilePage extends StatelessWidget {
                                 ) ?? false;
                                 
                                 if (confirm) {
-                                  await _authService.signOut();
-                                  // Navigate to HomePage and remove all previous routes
-                                  Navigator.of(context).pushAndRemoveUntil(
-                                    MaterialPageRoute(builder: (context) => HomePage(title: 'GoTask')),
-                                    (route) => false, // This removes all previous routes
-                                  );
+                                  final stopwatch = Stopwatch()..start();
+                                  CloudLogger().info('User sign-out initiated', {
+                                    'eventType': 'AUTH_FLOW',
+                                    'action': 'SIGNOUT_STARTED',
+                                    'userId': widget.user.uid
+                                  });
+                                  
+                                  try {
+                                    await _authService.signOut();
+                                    
+                                    stopwatch.stop();
+                                    CloudLogger().info('User signed out successfully', {
+                                      'eventType': 'AUTH_FLOW',
+                                      'action': 'SIGNOUT_COMPLETED',
+                                      'previousUserId': widget.user.uid,
+                                      'durationMs': stopwatch.elapsedMilliseconds
+                                    });
+                                    
+                                    CloudLogger().userAction('navigate_to_home_after_signout', {
+                                      'previousUserId': widget.user.uid
+                                    });
+                                    
+                                    // Navigate to HomePage and remove all previous routes
+                                    Navigator.of(context).pushAndRemoveUntil(
+                                      MaterialPageRoute(builder: (context) => HomePage(title: 'GoTask')),
+                                      (route) => false, // This removes all previous routes
+                                    );
+                                  } catch (e) {
+                                    stopwatch.stop();
+                                    CloudLogger().error('Error during sign-out', {
+                                      'eventType': 'AUTH_FLOW',
+                                      'action': 'SIGNOUT_ERROR',
+                                      'error': e.toString(),
+                                      'errorType': e.runtimeType.toString(),
+                                      'userId': widget.user.uid,
+                                      'durationMs': stopwatch.elapsedMilliseconds
+                                    });
+                                    
+                                    // Show error message to user
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Error signing out. Please try again.'),
+                                        backgroundColor: Colors.red.shade600,
+                                      ),
+                                    );
+                                  }
                                 }
                               },
                             ),

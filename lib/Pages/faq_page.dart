@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:gotask/services/cloud_logger.dart';
 
 class FAQPage extends StatefulWidget {
   const FAQPage({Key? key}) : super(key: key);
@@ -26,57 +27,84 @@ class _FAQPageState extends State<FAQPage> {
   @override
   void initState() {
     super.initState();
+    CloudLogger().pageView('FAQPage', {
+      'source': 'initState'
+    });
     _loadFAQsFromFirestore();
   }
   
   @override
   void dispose() {
     _searchController.dispose();
+    CloudLogger().debug('FAQPage disposed', {
+      'eventType': 'PAGE_LIFECYCLE',
+      'action': 'PAGE_DISPOSED'
+    });
     super.dispose();
   }
   
-  // Load FAQs from Firestore
-// Load FAQs from Firestore with detailed logging
-Future<void> _loadFAQsFromFirestore() async {
-  try {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
-  
-    // Fetch FAQ documents from Firestore
-    final QuerySnapshot querySnapshot = await FirebaseFirestore.instance
-        .collection('FAQ')
-        .get();
-
-    // Process query results
-    List<Map<String, String>> loadedFaqs = [];
+  // Load FAQs from Firestore with detailed logging
+  Future<void> _loadFAQsFromFirestore() async {
+    final stopwatch = Stopwatch()..start();
     
-    for (var doc in querySnapshot.docs) {
-      
-      Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-      
-      // Extract question and answer fields from each document
-      loadedFaqs.add({
-        'question': data['question'] ?? 'No question provided',
-        'answer': data['answer'] ?? 'No answer provided',
+    CloudLogger().info('Loading FAQs from Firestore', {
+      'eventType': 'DATA_FETCH',
+      'action': 'LOAD_FAQS_STARTED'
+    });
+    
+    try {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = '';
       });
-          }
-        
-    setState(() {
-      _faqItems = loadedFaqs;
-      _expandedList = List.generate(loadedFaqs.length, (index) => false);
-      _isLoading = false;
-    });
     
-  } catch (e, stackTrace) {
+      // Fetch FAQ documents from Firestore
+      final QuerySnapshot querySnapshot = await FirebaseFirestore.instance
+          .collection('FAQ')
+          .get();
 
-    setState(() {
-      _errorMessage = 'Failed to load FAQs: $e';
-      _isLoading = false;
-    });
+      // Process query results
+      List<Map<String, String>> loadedFaqs = [];
+      
+      for (var doc in querySnapshot.docs) {
+        Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+        
+        // Extract question and answer fields from each document
+        loadedFaqs.add({
+          'question': data['question'] ?? 'No question provided',
+          'answer': data['answer'] ?? 'No answer provided',
+        });
+      }
+          
+      setState(() {
+        _faqItems = loadedFaqs;
+        _expandedList = List.generate(loadedFaqs.length, (index) => false);
+        _isLoading = false;
+      });
+      
+      stopwatch.stop();
+      CloudLogger().info('FAQs loaded successfully', {
+        'eventType': 'DATA_FETCH',
+        'action': 'LOAD_FAQS_COMPLETED',
+        'faqCount': loadedFaqs.length,
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
+    } catch (e, stackTrace) {
+      stopwatch.stop();
+      CloudLogger().error('Failed to load FAQs', {
+        'eventType': 'DATA_FETCH',
+        'action': 'LOAD_FAQS_ERROR',
+        'error': e.toString(),
+        'errorType': e.runtimeType.toString(),
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
+
+      setState(() {
+        _errorMessage = 'Failed to load FAQs: $e';
+        _isLoading = false;
+      });
+    }
   }
-}
   
   // Filter FAQ items based on search query
   List<Map<String, String>> get _filteredFaqItems {
@@ -85,10 +113,22 @@ Future<void> _loadFAQsFromFirestore() async {
     }
     
     final query = _searchQuery.toLowerCase();
-    return _faqItems.where((item) {
+    final filteredItems = _faqItems.where((item) {
       return item['question']!.toLowerCase().contains(query) ||
              item['answer']!.toLowerCase().contains(query);
     }).toList();
+    
+    // Only log when search is performed, not on every rebuild
+    if (_searchQuery.length > 2) {  // Only log substantial searches
+      CloudLogger().info('FAQ search performed', {
+        'eventType': 'USER_SEARCH',
+        'searchQuery': _searchQuery,
+        'resultCount': filteredItems.length,
+        'totalFaqs': _faqItems.length
+      });
+    }
+    
+    return filteredItems;
   }
 
   @override
@@ -106,13 +146,22 @@ Future<void> _loadFAQsFromFirestore() async {
         ),
         leading: IconButton(
           icon: Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () {
+            CloudLogger().userAction('faq_page_back_button_pressed', {});
+            Navigator.of(context).pop();
+          },
         ),
         actions: [
           // Refresh button to reload FAQs
           IconButton(
             icon: Icon(Icons.refresh),
-            onPressed: _loadFAQsFromFirestore,
+            onPressed: () {
+              CloudLogger().userAction('faq_refresh_button_pressed', {
+                'currentFaqCount': _faqItems.length,
+                'hasSearchQuery': _searchQuery.isNotEmpty
+              });
+              _loadFAQsFromFirestore();
+            },
           ),
         ],
       ),
@@ -184,6 +233,11 @@ Future<void> _loadFAQsFromFirestore() async {
                           ? IconButton(
                               icon: Icon(Icons.clear, color: Colors.grey),
                               onPressed: () {
+                                CloudLogger().userAction('faq_search_cleared', {
+                                  'previousQuery': _searchQuery,
+                                  'queryLength': _searchQuery.length
+                                });
+                                
                                 _searchController.clear();
                                 setState(() {
                                   _searchQuery = '';
@@ -197,6 +251,18 @@ Future<void> _loadFAQsFromFirestore() async {
                         contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                       ),
                       onChanged: (value) {
+                        // Only log substantial changes to reduce noise
+                        if (value.isEmpty && _searchQuery.isNotEmpty) {
+                          CloudLogger().userAction('faq_search_cleared_by_typing', {
+                            'previousQuery': _searchQuery
+                          });
+                        } else if (value.length == 3 || value.length % 5 == 0) {
+                          // Log at 3 chars and then every 5 chars
+                          CloudLogger().userAction('faq_search_typing', {
+                            'queryLength': value.length
+                          });
+                        }
+                        
                         setState(() {
                           _searchQuery = value;
                         });
@@ -245,7 +311,12 @@ Future<void> _loadFAQsFromFirestore() async {
                                 ),
                                 SizedBox(height: 20),
                                 ElevatedButton.icon(
-                                  onPressed: _loadFAQsFromFirestore,
+                                  onPressed: () {
+                                    CloudLogger().userAction('faq_retry_button_pressed', {
+                                      'previousError': _errorMessage
+                                    });
+                                    _loadFAQsFromFirestore();
+                                  },
                                   icon: Icon(Icons.refresh),
                                   label: Text('Try Again'),
                                   style: ElevatedButton.styleFrom(
@@ -316,7 +387,10 @@ Future<void> _loadFAQsFromFirestore() async {
                               ),
                             )
                           : RefreshIndicator(
-                              onRefresh: _loadFAQsFromFirestore,
+                              onRefresh: () {
+                                CloudLogger().userAction('faq_pull_to_refresh', {});
+                                return _loadFAQsFromFirestore();
+                              },
                               color: Colors.blue.shade700,
                               child: ListView.builder(
                                 padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
@@ -327,6 +401,8 @@ Future<void> _loadFAQsFromFirestore() async {
                                     _expandedList.add(false);
                                   }
                                   
+                                  final faqItem = _filteredFaqItems[index];
+                                  
                                   return Card(
                                     margin: EdgeInsets.only(bottom: 8),
                                     elevation: 2,
@@ -336,12 +412,21 @@ Future<void> _loadFAQsFromFirestore() async {
                                     child: ExpansionTile(
                                       initiallyExpanded: _expandedList[index],
                                       onExpansionChanged: (expanded) {
+                                        if (expanded) {
+                                          CloudLogger().userAction('faq_item_expanded', {
+                                            'question': faqItem['question']?.substring(0, Math.min(50, faqItem['question']!.length)),
+                                            'position': index + 1,  // 1-based position for better readability
+                                            'totalVisible': _filteredFaqItems.length,
+                                            'fromSearch': _searchQuery.isNotEmpty
+                                          });
+                                        }
+                                        
                                         setState(() {
                                           _expandedList[index] = expanded;
                                         });
                                       },
                                       title: Text(
-                                        _filteredFaqItems[index]['question']!,
+                                        faqItem['question']!,
                                         style: TextStyle(
                                           fontWeight: FontWeight.bold,
                                           color: Colors.blue.shade800,
@@ -357,7 +442,7 @@ Future<void> _loadFAQsFromFirestore() async {
                                       ),
                                       children: [
                                         Text(
-                                          _filteredFaqItems[index]['answer']!,
+                                          faqItem['answer']!,
                                           style: TextStyle(
                                             fontSize: 14,
                                             color: Colors.grey.shade800,
@@ -376,7 +461,7 @@ Future<void> _loadFAQsFromFirestore() async {
                 Visibility(
                   visible: MediaQuery.of(context).viewInsets.bottom == 0,
                   child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal:.20, vertical: 12),
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     child: Column(
                       children: [
                         Text(
@@ -390,6 +475,12 @@ Future<void> _loadFAQsFromFirestore() async {
                         SizedBox(height: 8),
                         ElevatedButton.icon(
                           onPressed: () {
+                            CloudLogger().userAction('feedback_button_pressed', {
+                              'source': 'FAQPage',
+                              'searchPerformed': _searchQuery.isNotEmpty,
+                              'faqsViewed': _expandedList.where((expanded) => expanded).length
+                            });
+                            
                             // Navigate to feedback page when pressed
                             Navigator.of(context).pop();
                             // Add navigation to feedback page here
@@ -424,4 +515,9 @@ Future<void> _loadFAQsFromFirestore() async {
       ),
     );
   }
+}
+
+// Logging math function
+class Math {
+  static int min(int a, int b) => a < b ? a : b;
 }

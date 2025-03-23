@@ -3,6 +3,7 @@ import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:intl/intl.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:gotask/services/auth_service.dart';
+import 'package:gotask/services/cloud_logger.dart';
 
 class CreateEventPage extends StatefulWidget {
   @override
@@ -32,8 +33,31 @@ class _CreateEventPageState extends State<CreateEventPage> {
   bool _isValidatingLocation = false;
   String _errorMessage = '';
 
+  @override
+  void initState() {
+    super.initState();
+    CloudLogger().pageView('CreateEventPage', {
+      'initialDate': _startDate.toIso8601String(),
+      'hasPresetDate': false,
+    });
+  }
+
+  @override
+  void dispose() {
+    _locationController.dispose();
+    CloudLogger().debug('CreateEventPage disposed', {
+      'eventType': 'PAGE_LIFECYCLE',
+      'action': 'PAGE_DISPOSED'
+    });
+    super.dispose();
+  }
+
   // Date and time selection methods
   Future<void> _selectStartDate(BuildContext context) async {
+    CloudLogger().userAction('select_start_date_tapped', {
+      'currentStartDate': DateFormat('yyyy-MM-dd').format(_startDate)
+    });
+    
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _startDate,
@@ -54,17 +78,33 @@ class _CreateEventPageState extends State<CreateEventPage> {
       },
     );
     if (picked != null) {
+      CloudLogger().userAction('start_date_selected', {
+        'previousDate': DateFormat('yyyy-MM-dd').format(_startDate),
+        'selectedDate': DateFormat('yyyy-MM-dd').format(picked),
+      });
+      
       setState(() {
         _startDate = picked;
         // If end date is before new start date, update end date
         if (_endDate.isBefore(_startDate)) {
           _endDate = _startDate;
+          
+          CloudLogger().info('End date auto-adjusted to match start date', {
+            'eventType': 'FORM_VALIDATION',
+            'newEndDate': DateFormat('yyyy-MM-dd').format(_endDate)
+          });
         }
       });
+    } else {
+      CloudLogger().userAction('start_date_selection_cancelled', {});
     }
   }
 
   Future<void> _selectStartTime(BuildContext context) async {
+    CloudLogger().userAction('select_start_time_tapped', {
+      'currentStartTime': '${_startTime.hour}:${_startTime.minute}'
+    });
+    
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _startTime,
@@ -80,13 +120,24 @@ class _CreateEventPageState extends State<CreateEventPage> {
       },
     );
     if (picked != null) {
+      CloudLogger().userAction('start_time_selected', {
+        'previousTime': '${_startTime.hour}:${_startTime.minute}',
+        'selectedTime': '${picked.hour}:${picked.minute}'
+      });
+      
       setState(() {
         _startTime = picked;
       });
+    } else {
+      CloudLogger().userAction('start_time_selection_cancelled', {});
     }
   }
 
   Future<void> _selectEndDate(BuildContext context) async {
+    CloudLogger().userAction('select_end_date_tapped', {
+      'currentEndDate': DateFormat('yyyy-MM-dd').format(_endDate)
+    });
+    
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _endDate,
@@ -107,13 +158,24 @@ class _CreateEventPageState extends State<CreateEventPage> {
       },
     );
     if (picked != null) {
+      CloudLogger().userAction('end_date_selected', {
+        'previousDate': DateFormat('yyyy-MM-dd').format(_endDate),
+        'selectedDate': DateFormat('yyyy-MM-dd').format(picked)
+      });
+      
       setState(() {
         _endDate = picked;
       });
+    } else {
+      CloudLogger().userAction('end_date_selection_cancelled', {});
     }
   }
 
   Future<void> _selectEndTime(BuildContext context) async {
+    CloudLogger().userAction('select_end_time_tapped', {
+      'currentEndTime': '${_endTime.hour}:${_endTime.minute}'
+    });
+    
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _endTime,
@@ -129,9 +191,16 @@ class _CreateEventPageState extends State<CreateEventPage> {
       },
     );
     if (picked != null) {
+      CloudLogger().userAction('end_time_selected', {
+        'previousTime': '${_endTime.hour}:${_endTime.minute}',
+        'selectedTime': '${picked.hour}:${picked.minute}'
+      });
+      
       setState(() {
         _endTime = picked;
       });
+    } else {
+      CloudLogger().userAction('end_time_selection_cancelled', {});
     }
   }
 
@@ -150,6 +219,13 @@ class _CreateEventPageState extends State<CreateEventPage> {
       return true; // Empty location is valid (optional field)
     }
 
+    CloudLogger().info('Validating location', {
+      'eventType': 'LOCATION_VALIDATION',
+      'action': 'VALIDATION_STARTED',
+      'location': location
+    });
+    
+    final stopwatch = Stopwatch()..start();
     setState(() {
       _isValidatingLocation = true;
     });
@@ -161,11 +237,33 @@ class _CreateEventPageState extends State<CreateEventPage> {
         _isValidatingLocation = false;
       });
       
-      return locations.isNotEmpty;
+      stopwatch.stop();
+      final isValid = locations.isNotEmpty;
+      
+      CloudLogger().info('Location validation completed', {
+        'eventType': 'LOCATION_VALIDATION',
+        'action': 'VALIDATION_COMPLETED',
+        'location': location,
+        'isValid': isValid,
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
+      
+      return isValid;
     } catch (e) {
       setState(() {
         _isValidatingLocation = false;
       });
+      
+      stopwatch.stop();
+      CloudLogger().error('Location validation failed', {
+        'eventType': 'LOCATION_VALIDATION',
+        'action': 'VALIDATION_ERROR',
+        'location': location,
+        'error': e.toString(),
+        'errorType': e.runtimeType.toString(),
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
+      
       return false;
     }
   }
@@ -199,28 +297,62 @@ class _CreateEventPageState extends State<CreateEventPage> {
         break;
     }
     
+    CloudLogger().info('Applied recurrence pattern to event', {
+      'eventType': 'EVENT_CREATION',
+      'recurrencePattern': _recurrencePattern,
+      'recurrenceRule': recurrence.isNotEmpty ? recurrence[0] : 'none'
+    });
+    
     event.recurrence = recurrence;
     return event;
   }
 
   Future<void> _createEvent() async {
+    CloudLogger().userAction('create_event_button_tapped', {});
+    
     if (!_formKey.currentState!.validate()) {
+      CloudLogger().warn('Event creation form validation failed', {
+        'eventType': 'FORM_VALIDATION',
+        'action': 'VALIDATION_FAILED'
+      });
       return;
     }
     
     _formKey.currentState!.save();
     
     // Validate location before proceeding
-    if (!(await _validateLocation(_location))) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Invalid location. Please enter a valid address.')),
-      );
-      return;
+    if (_location.isNotEmpty) {
+      final isValidLocation = await _validateLocation(_location);
+      if (!isValidLocation) {
+        CloudLogger().warn('Event creation blocked due to invalid location', {
+          'eventType': 'FORM_VALIDATION',
+          'action': 'LOCATION_INVALID',
+          'location': _location
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid location. Please enter a valid address.')),
+        );
+        return;
+      }
     }
     
     setState(() {
       _isLoading = true;
       _errorMessage = '';
+    });
+    
+    final stopwatch = Stopwatch()..start();
+    CloudLogger().info('Creating calendar event', {
+      'eventType': 'EVENT_CREATION',
+      'action': 'CREATE_EVENT_STARTED',
+      'title': _title,
+      'description': _description.length,
+      'startDateTime': _combineDateAndTime(_startDate, _startTime).toIso8601String(),
+      'endDateTime': _combineDateAndTime(_endDate, _endTime).toIso8601String(),
+      'hasLocation': _location.isNotEmpty,
+      'isRecurring': _isRecurring,
+      'recurrencePattern': _recurrencePattern
     });
     
     try {
@@ -230,6 +362,14 @@ class _CreateEventPageState extends State<CreateEventPage> {
         setState(() {
           _isLoading = false;
           _errorMessage = 'Failed to get Calendar API client';
+        });
+        
+        stopwatch.stop();
+        CloudLogger().error('Failed to get Calendar API client', {
+          'eventType': 'API_ERROR',
+          'action': 'CREATE_EVENT_FAILED',
+          'reason': 'NULL_API_CLIENT',
+          'durationMs': stopwatch.elapsedMilliseconds
         });
         return;
       }
@@ -259,10 +399,22 @@ class _CreateEventPageState extends State<CreateEventPage> {
       // Add recurrence if needed
       event = _prepareEventWithRecurrence(event);
       
-      await calendarApi.events.insert(event, 'primary');
+      final apiStopwatch = Stopwatch()..start();
+      final createdEvent = await calendarApi.events.insert(event, 'primary');
+      apiStopwatch.stop();
       
       setState(() {
         _isLoading = false;
+      });
+      
+      stopwatch.stop();
+      CloudLogger().info('Calendar event created successfully', {
+        'eventType': 'EVENT_CREATION',
+        'action': 'CREATE_EVENT_COMPLETED',
+        'eventId': createdEvent.id,
+        'eventTitle': createdEvent.summary,
+        'apiCallDurationMs': apiStopwatch.elapsedMilliseconds,
+        'totalDurationMs': stopwatch.elapsedMilliseconds
       });
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -280,6 +432,15 @@ class _CreateEventPageState extends State<CreateEventPage> {
         _isLoading = false;
         _errorMessage = 'Error creating Task: $e';
       });
+      
+      stopwatch.stop();
+      CloudLogger().error('Error creating calendar event', {
+        'eventType': 'API_ERROR',
+        'action': 'CREATE_EVENT_ERROR',
+        'error': e.toString(),
+        'errorType': e.runtimeType.toString(),
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
     }
   }
 
@@ -294,6 +455,15 @@ class _CreateEventPageState extends State<CreateEventPage> {
           style: TextStyle(
             fontWeight: FontWeight.bold,
           ),
+        ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () {
+            CloudLogger().userAction('create_event_cancelled', {
+              'formFilled': _title.isNotEmpty || _description.isNotEmpty || _location.isNotEmpty
+            });
+            Navigator.pop(context, false);
+          },
         ),
       ),
       body: Container(
@@ -414,12 +584,22 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   ),
                                   validator: (value) {
                                     if (value == null || value.isEmpty) {
+                                      CloudLogger().warn('Title validation failed', {
+                                        'eventType': 'FORM_VALIDATION',
+                                        'field': 'title',
+                                        'reason': 'EMPTY_FIELD'
+                                      });
                                       return 'Please enter a title';
                                     }
                                     return null;
                                   },
                                   onSaved: (value) {
                                     _title = value!;
+                                    CloudLogger().debug('Title saved', {
+                                      'eventType': 'FORM_INPUT',
+                                      'field': 'title',
+                                      'length': _title.length
+                                    });
                                   },
                                 ),
                                 SizedBox(height: 20),
@@ -442,6 +622,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   maxLines: 3,
                                   onSaved: (value) {
                                     _description = value ?? '';
+                                    CloudLogger().debug('Description saved', {
+                                      'eventType': 'FORM_INPUT',
+                                      'field': 'description',
+                                      'hasContent': _description.isNotEmpty,
+                                      'length': _description.length
+                                    });
                                   },
                                 ),
                                 
@@ -622,6 +808,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                     Switch(
                                       value: _isRecurring,
                                       onChanged: (value) {
+                                        CloudLogger().userAction('recurrence_toggle_changed', {
+                                          'previousValue': _isRecurring,
+                                          'newValue': value
+                                        });
+                                        
                                         setState(() {
                                           _isRecurring = value;
                                           if (!value) {
@@ -664,51 +855,11 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                           value: 'daily',
                                           groupValue: _recurrencePattern,
                                           onChanged: (value) {
-                                            setState(() {
-                                              _recurrencePattern = value!;
+                                            CloudLogger().userAction('recurrence_pattern_changed', {
+                                              'previousPattern': _recurrencePattern,
+                                              'newPattern': value
                                             });
-                                          },
-                                          activeColor: Colors.blue.shade700,
-                                          contentPadding: EdgeInsets.zero,
-                                          dense: true,
-                                        ),
-                                        
-                                        // Weekly option
-                                        RadioListTile<String>(
-                                          title: Text('Weekly on ${DateFormat('EEEE').format(_startDate)}'),
-                                          value: 'weekly',
-                                          groupValue: _recurrencePattern,
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _recurrencePattern = value!;
-                                            });
-                                          },
-                                          activeColor: Colors.blue.shade700,
-                                          contentPadding: EdgeInsets.zero,
-                                          dense: true,
-                                        ),
-                                        
-                                        // Monthly option
-                                        RadioListTile<String>(
-                                          title: Text('Monthly on day ${_startDate.day}'),
-                                          value: 'monthly',
-                                          groupValue: _recurrencePattern,
-                                          onChanged: (value) {
-                                            setState(() {
-                                              _recurrencePattern = value!;
-                                            });
-                                          },
-                                          activeColor: Colors.blue.shade700,
-                                          contentPadding: EdgeInsets.zero,
-                                          dense: true,
-                                        ),
-                                        
-                                        // Yearly option
-                                        RadioListTile<String>(
-                                          title: Text('Yearly on ${DateFormat('MMMM d').format(_startDate)}'),
-                                          value: 'yearly',
-                                          groupValue: _recurrencePattern,
-                                          onChanged: (value) {
+                                            
                                             setState(() {
                                               _recurrencePattern = value!;
                                             });
@@ -762,9 +913,19 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                       : IconButton(
                                           icon: Icon(Icons.search, color: Colors.blue.shade700),
                                           onPressed: () async {
+                                            CloudLogger().userAction('validate_location_button_tapped', {
+                                              'location': _locationController.text
+                                            });
+                                            
                                             if (_locationController.text.isNotEmpty) {
                                               bool isValid = await _validateLocation(_locationController.text);
                                               if (!isValid) {
+                                                CloudLogger().warn('Location validation failed in UI', {
+                                                  'eventType': 'LOCATION_VALIDATION',
+                                                  'location': _locationController.text,
+                                                  'validationResult': 'INVALID'
+                                                });
+                                                
                                                 ScaffoldMessenger.of(context).showSnackBar(
                                                   SnackBar(
                                                     content: Text('Could not find this location'),
@@ -772,6 +933,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                                   ),
                                                 );
                                               } else {
+                                                CloudLogger().info('Location validated in UI', {
+                                                  'eventType': 'LOCATION_VALIDATION',
+                                                  'location': _locationController.text,
+                                                  'validationResult': 'VALID'
+                                                });
+                                                
                                                 ScaffoldMessenger.of(context).showSnackBar(
                                                   SnackBar(
                                                     content: Text('Location validated'),
@@ -785,6 +952,12 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                   ),
                                   onSaved: (value) {
                                     _location = value ?? '';
+                                    CloudLogger().debug('Location saved', {
+                                      'eventType': 'FORM_INPUT',
+                                      'field': 'location',
+                                      'hasLocation': _location.isNotEmpty,
+                                      'length': _location.length
+                                    });
                                   },
                                 ),
                                 

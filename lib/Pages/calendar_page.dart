@@ -5,6 +5,7 @@ import 'package:gotask/Pages/list_page.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:gotask/services/auth_service.dart';
+import 'package:gotask/services/cloud_logger.dart';
 import 'create_event_page.dart';
 import 'view_event_page.dart';
 import 'profile_page.dart';
@@ -28,13 +29,26 @@ class _CalendarPageState extends State<CalendarPage> {
   @override
   void initState() {
     super.initState();
+    CloudLogger().pageView('CalendarPage', {
+      'initialDate': _selectedDay.toIso8601String(),
+      'calendarFormat': _calendarFormat.toString()
+    });
     _fetchCalendarEvents();
   }
 
   Future<void> _fetchCalendarEvents() async {
+    final stopwatch = Stopwatch()..start();
+    
     setState(() {
       _isLoading = true;
       _errorMessage = '';
+    });
+
+    CloudLogger().info('Fetching calendar events', {
+      'eventType': 'DATA_FETCH',
+      'component': 'CalendarPage',
+      'action': 'FETCH_EVENTS_STARTED',
+      'focusedMonth': DateFormat('yyyy-MM').format(_focusedDay)
     });
 
     try {
@@ -45,6 +59,13 @@ class _CalendarPageState extends State<CalendarPage> {
           _isLoading = false;
           _errorMessage = 'Failed to get Calendar API client';
         });
+        
+        CloudLogger().error('Failed to get Calendar API client', {
+          'eventType': 'API_ERROR',
+          'component': 'CalendarPage',
+          'action': 'FETCH_EVENTS_FAILED',
+          'reason': 'NULL_API_CLIENT'
+        });
         return;
       }
 
@@ -53,6 +74,7 @@ class _CalendarPageState extends State<CalendarPage> {
       final start = DateTime(now.year, now.month - 1, 1);
       final end = DateTime(now.year, now.month + 2, 0);
       
+      final fetchStopwatch = Stopwatch()..start();
       final events = await calendarApi.events.list(
         'primary',
         timeMin: start.toUtc(),
@@ -60,6 +82,7 @@ class _CalendarPageState extends State<CalendarPage> {
         singleEvents: true,
         orderBy: 'startTime',
       );
+      fetchStopwatch.stop();
 
       // Group events by date
       final Map<DateTime, List<calendar.Event>> eventMap = {};
@@ -84,10 +107,31 @@ class _CalendarPageState extends State<CalendarPage> {
         _events = eventMap;
         _isLoading = false;
       });
+      
+      stopwatch.stop();
+      CloudLogger().info('Calendar events fetched successfully', {
+        'eventType': 'DATA_FETCH',
+        'component': 'CalendarPage',
+        'action': 'FETCH_EVENTS_COMPLETED',
+        'eventCount': events.items?.length ?? 0,
+        'daysWithEvents': eventMap.length,
+        'apiFetchDurationMs': fetchStopwatch.elapsedMilliseconds,
+        'totalDurationMs': stopwatch.elapsedMilliseconds
+      });
     } catch (e) {
       setState(() {
         _isLoading = false;
         _errorMessage = 'Error fetching calendar events: $e';
+      });
+      
+      stopwatch.stop();
+      CloudLogger().error('Error fetching calendar events', {
+        'eventType': 'API_ERROR',
+        'component': 'CalendarPage',
+        'action': 'FETCH_EVENTS_ERROR',
+        'error': e.toString(),
+        'errorType': e.runtimeType.toString(),
+        'durationMs': stopwatch.elapsedMilliseconds
       });
     }
   }
@@ -98,6 +142,12 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Future<void> _deleteEvent(calendar.Event event) async {
+    CloudLogger().userAction('delete_event_dialog_shown', {
+      'eventId': event.id,
+      'eventTitle': event.summary,
+      'screen': 'CalendarPage'
+    });
+
     // Show confirmation dialog before deleting
     final shouldDelete = await showDialog<bool>(
       context: context,
@@ -106,11 +156,23 @@ class _CalendarPageState extends State<CalendarPage> {
         content: Text('Are you sure you want to clear this task "${event.summary}"?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: () {
+              CloudLogger().userAction('delete_event_canceled', {
+                'eventId': event.id,
+                'eventTitle': event.summary
+              });
+              Navigator.of(context).pop(false);
+            },
             child: Text('CANCEL'),
           ),
           TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: () {
+              CloudLogger().userAction('delete_event_confirmed', {
+                'eventId': event.id,
+                'eventTitle': event.summary
+              });
+              Navigator.of(context).pop(true);
+            },
             child: Text('DELETE'),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
           ),
@@ -124,6 +186,15 @@ class _CalendarPageState extends State<CalendarPage> {
       _isLoading = true;
     });
 
+    final stopwatch = Stopwatch()..start();
+    CloudLogger().info('Deleting calendar event', {
+      'eventType': 'DATA_MUTATION',
+      'component': 'CalendarPage',
+      'action': 'DELETE_EVENT_STARTED',
+      'eventId': event.id,
+      'eventTitle': event.summary
+    });
+
     try {
       final calendarApi = await _authService.getCalendarApi();
       
@@ -132,11 +203,28 @@ class _CalendarPageState extends State<CalendarPage> {
           _isLoading = false;
           _errorMessage = 'Failed to get Calendar API client';
         });
+        
+        CloudLogger().error('Failed to get Calendar API client for delete', {
+          'eventType': 'API_ERROR',
+          'component': 'CalendarPage',
+          'action': 'DELETE_EVENT_FAILED',
+          'reason': 'NULL_API_CLIENT',
+          'eventId': event.id
+        });
         return;
       }
 
       // Delete the event
       await calendarApi.events.delete('primary', event.id!);
+      
+      stopwatch.stop();
+      CloudLogger().info('Calendar event deleted successfully', {
+        'eventType': 'DATA_MUTATION',
+        'component': 'CalendarPage',
+        'action': 'DELETE_EVENT_COMPLETED',
+        'eventId': event.id,
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Task successfully cleared')),
@@ -150,6 +238,17 @@ class _CalendarPageState extends State<CalendarPage> {
         _errorMessage = 'Error clearing task: $e';
       });
       
+      stopwatch.stop();
+      CloudLogger().error('Error deleting calendar event', {
+        'eventType': 'API_ERROR',
+        'component': 'CalendarPage',
+        'action': 'DELETE_EVENT_ERROR',
+        'eventId': event.id,
+        'error': e.toString(),
+        'errorType': e.runtimeType.toString(),
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error deleting event')),
       );
@@ -157,6 +256,12 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Future<void> _viewEventDetails(calendar.Event event) async {
+    CloudLogger().userAction('view_event_details', {
+      'eventId': event.id,
+      'eventTitle': event.summary,
+      'eventDate': event.start?.dateTime?.toIso8601String()
+    });
+    
     await Navigator.push(
       context,
       MaterialPageRoute(
@@ -167,6 +272,11 @@ class _CalendarPageState extends State<CalendarPage> {
         ),
       ),
     );
+    
+    CloudLogger().pageView('CalendarPage', {
+      'returnedFrom': 'EventDetailsPage',
+      'selectedDate': _selectedDay.toIso8601String()
+    });
   }
 
   @override
@@ -185,18 +295,30 @@ class _CalendarPageState extends State<CalendarPage> {
         actions: [
           IconButton(
             icon: Icon(Icons.refresh),
-            onPressed: _fetchCalendarEvents,
+            onPressed: () {
+              CloudLogger().userAction('refresh_calendar', {
+                'focusedMonth': DateFormat('yyyy-MM').format(_focusedDay)
+              });
+              _fetchCalendarEvents();
+            },
             tooltip: 'Refresh Tasks/Events',
           ),
           IconButton(
             icon: Icon(Icons.account_circle),
             onPressed: () {
+              CloudLogger().userAction('navigate_to_profile', {
+                'from': 'CalendarPage'
+              });
               Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => ProfilePage(user: _authService.currentUser!),
                 ),
-              );
+              ).then((_) {
+                CloudLogger().pageView('CalendarPage', {
+                  'returnedFrom': 'ProfilePage'
+                });
+              });
             },
             tooltip: 'User Profile',
           ),
@@ -272,7 +394,12 @@ class _CalendarPageState extends State<CalendarPage> {
                             ),
                             SizedBox(height: 24),
                             ElevatedButton(
-                              onPressed: _fetchCalendarEvents,
+                              onPressed: () {
+                                CloudLogger().userAction('retry_calendar_fetch', {
+                                  'previousError': _errorMessage
+                                });
+                                _fetchCalendarEvents();
+                              },
                               child: Text('Try Again'),
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: Colors.blue.shade700,
@@ -313,17 +440,33 @@ class _CalendarPageState extends State<CalendarPage> {
                                     return isSameDay(_selectedDay, day);
                                   },
                                   onDaySelected: (selectedDay, focusedDay) {
+                                    CloudLogger().userAction('calendar_day_selected', {
+                                      'selectedDate': DateFormat('yyyy-MM-dd').format(selectedDay),
+                                      'previousDate': DateFormat('yyyy-MM-dd').format(_selectedDay),
+                                      'eventCount': _getEventsForDay(selectedDay).length
+                                    });
+                                    
                                     setState(() {
                                       _selectedDay = selectedDay;
                                       _focusedDay = focusedDay;
                                     });
                                   },
                                   onFormatChanged: (format) {
+                                    CloudLogger().userAction('calendar_format_changed', {
+                                      'previousFormat': _calendarFormat.toString(),
+                                      'newFormat': format.toString()
+                                    });
+                                    
                                     setState(() {
                                       _calendarFormat = format;
                                     });
                                   },
                                   onPageChanged: (focusedDay) {
+                                    CloudLogger().userAction('calendar_page_changed', {
+                                      'previousMonth': DateFormat('yyyy-MM').format(_focusedDay),
+                                      'newMonth': DateFormat('yyyy-MM').format(focusedDay)
+                                    });
+                                    
                                     setState(() {
                                       _focusedDay = focusedDay;
                                     });
@@ -468,12 +611,22 @@ class _CalendarPageState extends State<CalendarPage> {
                                                       IconButton(
                                                         icon: Icon(Icons.edit, color: Colors.blue.shade600, size: 20),
                                                         onPressed: () async {
+                                                          CloudLogger().userAction('edit_event_button_tapped', {
+                                                            'eventId': event.id,
+                                                            'eventTitle': event.summary
+                                                          });
+                                                          
                                                           final result = await Navigator.push(
                                                             context,
                                                             MaterialPageRoute(
                                                               builder: (context) => EditEventPage(event: event),
                                                             ),
                                                           );
+                                                          
+                                                          CloudLogger().pageView('CalendarPage', {
+                                                            'returnedFrom': 'EditEventPage',
+                                                            'editResult': result.toString()
+                                                          });
                                                           
                                                           if (result == true) {
                                                             _fetchCalendarEvents();
@@ -482,7 +635,13 @@ class _CalendarPageState extends State<CalendarPage> {
                                                       ),
                                                       IconButton(
                                                         icon: Icon(Icons.delete, color: Colors.red.shade400, size: 20),
-                                                        onPressed: () => _deleteEvent(event),
+                                                        onPressed: () {
+                                                          CloudLogger().userAction('delete_event_button_tapped', {
+                                                            'eventId': event.id,
+                                                            'eventTitle': event.summary
+                                                          });
+                                                          _deleteEvent(event);
+                                                        },
                                                       ),
                                                     ],
                                                   ),
@@ -509,6 +668,11 @@ class _CalendarPageState extends State<CalendarPage> {
                 foregroundColor: Colors.blue.shade700,
                 elevation: 4,
                 onPressed: () {
+                  CloudLogger().userAction('switch_to_list_view', {
+                    'from': 'CalendarPage',
+                    'currentMonth': DateFormat('yyyy-MM').format(_focusedDay)
+                  });
+                  
                   Navigator.pushReplacement(
                     context,
                     MaterialPageRoute(
@@ -527,12 +691,21 @@ class _CalendarPageState extends State<CalendarPage> {
         heroTag: "addTask",
         backgroundColor: Colors.blue.shade700,
         onPressed: () async {
+          CloudLogger().userAction('add_task_button_tapped', {
+            'selectedDate': DateFormat('yyyy-MM-dd').format(_selectedDay)
+          });
+          
           final result = await Navigator.push(
             context,
             MaterialPageRoute(
               builder: (context) => CreateEventPage(),
             ),
           );
+          
+          CloudLogger().pageView('CalendarPage', {
+            'returnedFrom': 'CreateEventPage',
+            'createResult': result.toString()
+          });
           
           if (result == true) {
             _fetchCalendarEvents();

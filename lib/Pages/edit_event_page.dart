@@ -3,6 +3,7 @@ import 'package:googleapis/calendar/v3.dart' as calendar;
 import 'package:intl/intl.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:gotask/services/auth_service.dart';
+import 'package:gotask/services/cloud_logger.dart';
 
 class EditEventPage extends StatefulWidget {
   final calendar.Event event;
@@ -49,9 +50,32 @@ class _EditEventPageState extends State<EditEventPage> {
     
     _location = widget.event.location ?? '';
     _locationController.text = _location;
+    
+    CloudLogger().pageView('EditEventPage', {
+      'eventId': widget.event.id,
+      'eventTitle': widget.event.summary,
+      'eventStartDate': startDateTime.toIso8601String(),
+      'hasLocation': _location.isNotEmpty
+    });
+  }
+
+  @override
+  void dispose() {
+    _locationController.dispose();
+    CloudLogger().debug('EditEventPage disposed', {
+      'eventType': 'PAGE_LIFECYCLE',
+      'action': 'PAGE_DISPOSED',
+      'eventId': widget.event.id
+    });
+    super.dispose();
   }
 
   Future<void> _selectStartDate(BuildContext context) async {
+    CloudLogger().userAction('select_start_date_tapped', {
+      'eventId': widget.event.id,
+      'currentStartDate': DateFormat('yyyy-MM-dd').format(_startDate)
+    });
+    
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _startDate,
@@ -72,17 +96,38 @@ class _EditEventPageState extends State<EditEventPage> {
       },
     );
     if (picked != null) {
+      CloudLogger().userAction('start_date_selected', {
+        'eventId': widget.event.id,
+        'previousDate': DateFormat('yyyy-MM-dd').format(_startDate),
+        'selectedDate': DateFormat('yyyy-MM-dd').format(picked),
+      });
+      
       setState(() {
         _startDate = picked;
         // If end date is before new start date, update end date
         if (_endDate.isBefore(_startDate)) {
           _endDate = _startDate;
+          
+          CloudLogger().info('End date auto-adjusted to match start date', {
+            'eventType': 'FORM_VALIDATION',
+            'eventId': widget.event.id,
+            'newEndDate': DateFormat('yyyy-MM-dd').format(_endDate)
+          });
         }
+      });
+    } else {
+      CloudLogger().userAction('start_date_selection_cancelled', {
+        'eventId': widget.event.id
       });
     }
   }
 
   Future<void> _selectStartTime(BuildContext context) async {
+    CloudLogger().userAction('select_start_time_tapped', {
+      'eventId': widget.event.id,
+      'currentStartTime': '${_startTime.hour}:${_startTime.minute}'
+    });
+    
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _startTime,
@@ -98,13 +143,28 @@ class _EditEventPageState extends State<EditEventPage> {
       },
     );
     if (picked != null) {
+      CloudLogger().userAction('start_time_selected', {
+        'eventId': widget.event.id,
+        'previousTime': '${_startTime.hour}:${_startTime.minute}',
+        'selectedTime': '${picked.hour}:${picked.minute}'
+      });
+      
       setState(() {
         _startTime = picked;
+      });
+    } else {
+      CloudLogger().userAction('start_time_selection_cancelled', {
+        'eventId': widget.event.id
       });
     }
   }
 
   Future<void> _selectEndDate(BuildContext context) async {
+    CloudLogger().userAction('select_end_date_tapped', {
+      'eventId': widget.event.id,
+      'currentEndDate': DateFormat('yyyy-MM-dd').format(_endDate)
+    });
+    
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _endDate,
@@ -125,13 +185,28 @@ class _EditEventPageState extends State<EditEventPage> {
       },
     );
     if (picked != null) {
+      CloudLogger().userAction('end_date_selected', {
+        'eventId': widget.event.id,
+        'previousDate': DateFormat('yyyy-MM-dd').format(_endDate),
+        'selectedDate': DateFormat('yyyy-MM-dd').format(picked)
+      });
+      
       setState(() {
         _endDate = picked;
+      });
+    } else {
+      CloudLogger().userAction('end_date_selection_cancelled', {
+        'eventId': widget.event.id
       });
     }
   }
 
   Future<void> _selectEndTime(BuildContext context) async {
+    CloudLogger().userAction('select_end_time_tapped', {
+      'eventId': widget.event.id,
+      'currentEndTime': '${_endTime.hour}:${_endTime.minute}'
+    });
+    
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _endTime,
@@ -147,8 +222,18 @@ class _EditEventPageState extends State<EditEventPage> {
       },
     );
     if (picked != null) {
+      CloudLogger().userAction('end_time_selected', {
+        'eventId': widget.event.id,
+        'previousTime': '${_endTime.hour}:${_endTime.minute}',
+        'selectedTime': '${picked.hour}:${picked.minute}'
+      });
+      
       setState(() {
         _endTime = picked;
+      });
+    } else {
+      CloudLogger().userAction('end_time_selection_cancelled', {
+        'eventId': widget.event.id
       });
     }
   }
@@ -168,6 +253,14 @@ class _EditEventPageState extends State<EditEventPage> {
       return true; // Empty location is valid (optional field)
     }
 
+    CloudLogger().info('Validating location for edit', {
+      'eventType': 'LOCATION_VALIDATION',
+      'action': 'VALIDATION_STARTED',
+      'eventId': widget.event.id,
+      'location': location
+    });
+    
+    final stopwatch = Stopwatch()..start();
     setState(() {
       _isValidatingLocation = true;
     });
@@ -179,36 +272,127 @@ class _EditEventPageState extends State<EditEventPage> {
         _isValidatingLocation = false;
       });
       
-      return locations.isNotEmpty;
+      stopwatch.stop();
+      final isValid = locations.isNotEmpty;
+      
+      CloudLogger().info('Location validation completed for edit', {
+        'eventType': 'LOCATION_VALIDATION',
+        'action': 'VALIDATION_COMPLETED',
+        'eventId': widget.event.id,
+        'location': location,
+        'isValid': isValid,
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
+      
+      return isValid;
     } catch (e) {
       setState(() {
         _isValidatingLocation = false;
       });
+      
+      stopwatch.stop();
+      CloudLogger().error('Location validation failed for edit', {
+        'eventType': 'LOCATION_VALIDATION',
+        'action': 'VALIDATION_ERROR',
+        'eventId': widget.event.id,
+        'location': location,
+        'error': e.toString(),
+        'errorType': e.runtimeType.toString(),
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
+      
       return false;
     }
   }
 
   Future<void> _updateEvent() async {
+    CloudLogger().userAction('update_event_button_tapped', {
+      'eventId': widget.event.id
+    });
+    
     if (!_formKey.currentState!.validate()) {
+      CloudLogger().warn('Event update form validation failed', {
+        'eventType': 'FORM_VALIDATION',
+        'action': 'VALIDATION_FAILED',
+        'eventId': widget.event.id
+      });
       return;
     }
     
     _formKey.currentState!.save();
     
     // Validate location before proceeding
-    if (!(await _validateLocation(_location))) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Invalid location. Please enter a valid address.'),
-          backgroundColor: Colors.red.shade600,
-        ),
-      );
-      return;
+    if (_location.isNotEmpty) {
+      final isValidLocation = await _validateLocation(_location);
+      if (!isValidLocation) {
+        CloudLogger().warn('Event update blocked due to invalid location', {
+          'eventType': 'FORM_VALIDATION',
+          'action': 'LOCATION_INVALID',
+          'eventId': widget.event.id,
+          'location': _location
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Invalid location. Please enter a valid address.'),
+            backgroundColor: Colors.red.shade600,
+          ),
+        );
+        return;
+      }
     }
     
     setState(() {
       _isLoading = true;
       _errorMessage = '';
+    });
+    
+    final stopwatch = Stopwatch()..start();
+    
+    // Track what fields are being modified
+    Map<String, dynamic> changedFields = {};
+    if (_title != widget.event.summary) {
+      changedFields['title'] = true;
+    }
+    if (_description != widget.event.description) {
+      changedFields['description'] = true;
+    }
+    if (_location != widget.event.location) {
+      changedFields['location'] = true;
+    }
+    
+    final originalStartDateTime = widget.event.start?.dateTime;
+    final newStartDateTime = _combineDateAndTime(_startDate, _startTime);
+    if (originalStartDateTime != null && 
+        (originalStartDateTime.day != newStartDateTime.day ||
+         originalStartDateTime.month != newStartDateTime.month ||
+         originalStartDateTime.year != newStartDateTime.year ||
+         originalStartDateTime.hour != newStartDateTime.hour ||
+         originalStartDateTime.minute != newStartDateTime.minute)) {
+      changedFields['startDateTime'] = true;
+    }
+    
+    final originalEndDateTime = widget.event.end?.dateTime;
+    final newEndDateTime = _combineDateAndTime(_endDate, _endTime);
+    if (originalEndDateTime != null &&
+        (originalEndDateTime.day != newEndDateTime.day ||
+         originalEndDateTime.month != newEndDateTime.month ||
+         originalEndDateTime.year != newEndDateTime.year ||
+         originalEndDateTime.hour != newEndDateTime.hour ||
+         originalEndDateTime.minute != newEndDateTime.minute)) {
+      changedFields['endDateTime'] = true;
+    }
+    
+    CloudLogger().info('Updating calendar event', {
+      'eventType': 'EVENT_UPDATE',
+      'action': 'UPDATE_EVENT_STARTED',
+      'eventId': widget.event.id,
+      'title': _title,
+      'description': _description.length,
+      'startDateTime': newStartDateTime.toIso8601String(),
+      'endDateTime': newEndDateTime.toIso8601String(),
+      'hasLocation': _location.isNotEmpty,
+      'changedFields': changedFields,
     });
     
     try {
@@ -219,11 +403,17 @@ class _EditEventPageState extends State<EditEventPage> {
           _isLoading = false;
           _errorMessage = 'Failed to get Calendar API client';
         });
+        
+        stopwatch.stop();
+        CloudLogger().error('Failed to get Calendar API client for update', {
+          'eventType': 'API_ERROR',
+          'action': 'UPDATE_EVENT_FAILED',
+          'reason': 'NULL_API_CLIENT',
+          'eventId': widget.event.id,
+          'durationMs': stopwatch.elapsedMilliseconds
+        });
         return;
       }
-      
-      final startDateTime = _combineDateAndTime(_startDate, _startTime);
-      final endDateTime = _combineDateAndTime(_endDate, _endTime);
       
       // Create updated event
       calendar.Event updatedEvent = calendar.Event();
@@ -232,12 +422,12 @@ class _EditEventPageState extends State<EditEventPage> {
       updatedEvent.description = _description;
       
       calendar.EventDateTime start = calendar.EventDateTime();
-      start.dateTime = startDateTime.toUtc();
+      start.dateTime = newStartDateTime.toUtc();
       start.timeZone = 'UTC';
       updatedEvent.start = start;
       
       calendar.EventDateTime end = calendar.EventDateTime();
-      end.dateTime = endDateTime.toUtc();
+      end.dateTime = newEndDateTime.toUtc();
       end.timeZone = 'UTC';
       updatedEvent.end = end;
       
@@ -246,10 +436,23 @@ class _EditEventPageState extends State<EditEventPage> {
       }
       
       // Update the event
-      await calendarApi.events.update(updatedEvent, 'primary', widget.event.id!);
+      final apiStopwatch = Stopwatch()..start();
+      final updatedEventResult = await calendarApi.events.update(updatedEvent, 'primary', widget.event.id!);
+      apiStopwatch.stop();
       
       setState(() {
         _isLoading = false;
+      });
+      
+      stopwatch.stop();
+      CloudLogger().info('Calendar event updated successfully', {
+        'eventType': 'EVENT_UPDATE',
+        'action': 'UPDATE_EVENT_COMPLETED',
+        'eventId': widget.event.id,
+        'eventTitle': updatedEvent.summary,
+        'changedFieldCount': changedFields.length,
+        'apiCallDurationMs': apiStopwatch.elapsedMilliseconds,
+        'totalDurationMs': stopwatch.elapsedMilliseconds
       });
       
       ScaffoldMessenger.of(context).showSnackBar(
@@ -265,6 +468,16 @@ class _EditEventPageState extends State<EditEventPage> {
         _isLoading = false;
         _errorMessage = 'Error updating event: $e';
       });
+      
+      stopwatch.stop();
+      CloudLogger().error('Error updating calendar event', {
+        'eventType': 'API_ERROR',
+        'action': 'UPDATE_EVENT_ERROR',
+        'eventId': widget.event.id,
+        'error': e.toString(),
+        'errorType': e.runtimeType.toString(),
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
     }
   }
 
@@ -279,6 +492,16 @@ class _EditEventPageState extends State<EditEventPage> {
           style: TextStyle(
             fontWeight: FontWeight.bold,
           ),
+        ),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back),
+          onPressed: () {
+            CloudLogger().userAction('edit_event_cancelled', {
+              'eventId': widget.event.id,
+              'eventTitle': widget.event.summary
+            });
+            Navigator.pop(context, false);
+          },
         ),
       ),
       body: Container(
@@ -400,311 +623,29 @@ class _EditEventPageState extends State<EditEventPage> {
                                   ),
                                   validator: (value) {
                                     if (value == null || value.isEmpty) {
+                                      CloudLogger().warn('Title validation failed in edit', {
+                                        'eventType': 'FORM_VALIDATION',
+                                        'field': 'title',
+                                        'reason': 'EMPTY_FIELD',
+                                        'eventId': widget.event.id
+                                      });
                                       return 'Please enter a title';
                                     }
                                     return null;
                                   },
                                   onSaved: (value) {
                                     _title = value!;
+                                    if (_title != widget.event.summary) {
+                                      CloudLogger().debug('Title changed in edit', {
+                                        'eventType': 'FORM_INPUT',
+                                        'field': 'title',
+                                        'eventId': widget.event.id,
+                                        'originalLength': widget.event.summary?.length ?? 0,
+                                        'newLength': _title.length,
+                                        'changed': true
+                                      });
+                                    }
                                   },
-                                ),
-                                SizedBox(height: 20),
-                                TextFormField(
-                                  initialValue: _description,
-                                  decoration: InputDecoration(
-                                    labelText: 'Description',
-                                    hintText: 'Enter event description (optional)',
-                                    prefixIcon: Icon(Icons.description, color: Colors.blue.shade700),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(color: Colors.grey.shade300),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
-                                    ),
-                                    filled: true,
-                                    fillColor: Colors.grey.shade50,
-                                  ),
-                                  maxLines: 3,
-                                  onSaved: (value) {
-                                    _description = value ?? '';
-                                  },
-                                ),
-                                
-                                SizedBox(height: 32),
-                                
-                                // Date & Time Section
-                                Text(
-                                  'Date & Time',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue.shade800,
-                                  ),
-                                ),
-                                SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () => _selectStartDate(context),
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(vertical: 16),
-                                          decoration: BoxDecoration(
-                                            border: Border.all(color: Colors.grey.shade300),
-                                            borderRadius: BorderRadius.circular(12),
-                                            color: Colors.grey.shade50,
-                                          ),
-                                          child: Column(
-                                            children: [
-                                              Icon(Icons.calendar_today, color: Colors.blue.shade700),
-                                              SizedBox(height: 8),
-                                              Text(
-                                                'Start Date',
-                                                style: TextStyle(
-                                                  color: Colors.grey.shade700,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                              SizedBox(height: 4),
-                                              Text(
-                                                DateFormat('MMM d, yyyy').format(_startDate),
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(width: 12),
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () => _selectStartTime(context),
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(vertical: 16),
-                                          decoration: BoxDecoration(
-                                            border: Border.all(color: Colors.grey.shade300),
-                                            borderRadius: BorderRadius.circular(12),
-                                            color: Colors.grey.shade50,
-                                          ),
-                                          child: Column(
-                                            children: [
-                                              Icon(Icons.access_time, color: Colors.blue.shade700),
-                                              SizedBox(height: 8),
-                                              Text(
-                                                'Start Time',
-                                                style: TextStyle(
-                                                  color: Colors.grey.shade700,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                              SizedBox(height: 4),
-                                              Text(
-                                                _startTime.format(context),
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                SizedBox(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () => _selectEndDate(context),
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(vertical: 16),
-                                          decoration: BoxDecoration(
-                                            border: Border.all(color: Colors.grey.shade300),
-                                            borderRadius: BorderRadius.circular(12),
-                                            color: Colors.grey.shade50,
-                                          ),
-                                          child: Column(
-                                            children: [
-                                              Icon(Icons.calendar_today, color: Colors.blue.shade700),
-                                              SizedBox(height: 8),
-                                              Text(
-                                                'End Date',
-                                                style: TextStyle(
-                                                  color: Colors.grey.shade700,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                              SizedBox(height: 4),
-                                              Text(
-                                                DateFormat('MMM d, yyyy').format(_endDate),
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                    SizedBox(width: 12),
-                                    Expanded(
-                                      child: InkWell(
-                                        onTap: () => _selectEndTime(context),
-                                        borderRadius: BorderRadius.circular(12),
-                                        child: Container(
-                                          padding: EdgeInsets.symmetric(vertical: 16),
-                                          decoration: BoxDecoration(
-                                            border: Border.all(color: Colors.grey.shade300),
-                                            borderRadius: BorderRadius.circular(12),
-                                            color: Colors.grey.shade50,
-                                          ),
-                                          child: Column(
-                                            children: [
-                                              Icon(Icons.access_time, color: Colors.blue.shade700),
-                                              SizedBox(height: 8),
-                                              Text(
-                                                'End Time',
-                                                style: TextStyle(
-                                                  color: Colors.grey.shade700,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                              SizedBox(height: 4),
-                                              Text(
-                                                _endTime.format(context),
-                                                style: TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                
-                                SizedBox(height: 32),
-                                
-                                // Location Section
-                                Text(
-                                  'Location (Optional)',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.blue.shade800,
-                                  ),
-                                ),
-                                SizedBox(height: 16),
-                                TextFormField(
-                                  controller: _locationController,
-                                  decoration: InputDecoration(
-                                    labelText: 'Location',
-                                    hintText: 'Enter event location',
-                                    prefixIcon: Icon(Icons.location_on, color: Colors.blue.shade700),
-                                    border: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(color: Colors.grey.shade300),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(12),
-                                      borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
-                                    ),
-                                    filled: true,
-                                    fillColor: Colors.grey.shade50,
-                                    suffixIcon: _isValidatingLocation 
-                                      ? Container(
-                                          height: 20,
-                                          width: 20,
-                                          padding: EdgeInsets.all(8),
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade700),
-                                          ),
-                                        )
-                                      : IconButton(
-                                          icon: Icon(Icons.search, color: Colors.blue.shade700),
-                                          onPressed: () async {
-                                            if (_locationController.text.isNotEmpty) {
-                                              bool isValid = await _validateLocation(_locationController.text);
-                                              if (!isValid) {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text('Could not find this location'),
-                                                    backgroundColor: Colors.red.shade600,
-                                                  ),
-                                                );
-                                              } else {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text('Location validated'),
-                                                    backgroundColor: Colors.green.shade600,
-                                                  ),
-                                                );
-                                              }
-                                            }
-                                          },
-                                        ),
-                                  ),
-                                  onSaved: (value) {
-                                    _location = value ?? '';
-                                  },
-                                ),
-                                
-                                SizedBox(height: 32),
-                                
-                                // Submit Button
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: 56.0,
-                                  child: ElevatedButton(
-                                    onPressed: _updateEvent,
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Colors.blue.shade700,
-                                      foregroundColor: Colors.white,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      elevation: 2,
-                                    ),
-                                    child: Text(
-                                      'Update Event',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                SizedBox(height: 16),
-                                SizedBox(
-                                  width: double.infinity,
-                                  height: 56.0,
-                                  child: OutlinedButton(
-                                    onPressed: () => Navigator.of(context).pop(),
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: Colors.blue.shade700,
-                                      side: BorderSide(color: Colors.blue.shade700),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      'Cancel',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
                                 ),
                                 SizedBox(height: 20),
                               ],
