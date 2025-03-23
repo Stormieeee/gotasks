@@ -135,3 +135,5 @@ class CloudLogger {
     await _logEvent(success ? 'INFO' : 'ERROR', 'API call to $endpoint', apiMetadata);
   }
 }
+
+//note logging happens in cloud Google 

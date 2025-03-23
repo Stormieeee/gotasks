@@ -2,7 +2,7 @@ name: Build and Deploy to Firebase App Distribution
 
 on:
   push:
-    branches: [ dev ]  # Run when pushing to dev branch
+    branches: [ non_existent_branch  ]  # Run when pushing to dev branch
   workflow_dispatch:  # Allows manual triggering
 
 jobs:
