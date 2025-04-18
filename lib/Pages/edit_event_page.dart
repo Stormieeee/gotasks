@@ -55,7 +55,7 @@ class _EditEventPageState extends State<EditEventPage> {
       'eventId': widget.event.id,
       'eventTitle': widget.event.summary,
       'eventStartDate': startDateTime.toIso8601String(),
-      'hasLocation': _location.isNotEmpty
+      'hasLocation': _location.isNotEmpty,
     });
   }
 
@@ -441,8 +441,7 @@ class _EditEventPageState extends State<EditEventPage> {
       apiStopwatch.stop();
       
       setState(() {
-        _isLoading = false;
-      });
+        _isLoading = false;});
       
       stopwatch.stop();
       CloudLogger().info('Calendar event updated successfully', {
@@ -457,7 +456,7 @@ class _EditEventPageState extends State<EditEventPage> {
       
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Event updated successfully!'),
+          content: Text('Task updated successfully!'),
           backgroundColor: Colors.green.shade600,
         ),
       );
@@ -478,6 +477,13 @@ class _EditEventPageState extends State<EditEventPage> {
         'errorType': e.runtimeType.toString(),
         'durationMs': stopwatch.elapsedMilliseconds
       });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to update task: $e'),
+          backgroundColor: Colors.red.shade600,
+        ),
+      );
     }
   }
 
@@ -648,12 +654,321 @@ class _EditEventPageState extends State<EditEventPage> {
                                   },
                                 ),
                                 SizedBox(height: 20),
+                                TextFormField(
+                                  initialValue: _description,
+                                  decoration: InputDecoration(
+                                    labelText: 'Description',
+                                    hintText: 'Enter event description (optional)',
+                                    prefixIcon: Icon(Icons.description, color: Colors.blue.shade700),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey.shade50,
+                                  ),
+                                  maxLines: 3,
+                                  onSaved: (value) {
+                                    _description = value ?? '';
+                                    CloudLogger().debug('Description saved in edit', {
+                                      'eventType': 'FORM_INPUT',
+                                      'field': 'description',
+                                      'eventId': widget.event.id,
+                                      'hasContent': _description.isNotEmpty,
+                                      'length': _description.length
+                                    });
+                                  },
+                                ),
+                                
+                                SizedBox(height: 32),
+                                
+                                // Date & Time Section
+                                Text(
+                                  'Date & Time',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue.shade800,
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: InkWell(
+                                        onTap: () => _selectStartDate(context),
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Container(
+                                          padding: EdgeInsets.symmetric(vertical: 16),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: Colors.grey.shade300),
+                                            borderRadius: BorderRadius.circular(12),
+                                            color: Colors.grey.shade50,
+                                          ),
+                                          child: Column(
+                                            children: [
+                                              Icon(Icons.calendar_today, color: Colors.blue.shade700),
+                                              SizedBox(height: 8),
+                                              Text(
+                                                'Start Date',
+                                                style: TextStyle(
+                                                  color: Colors.grey.shade700,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              SizedBox(height: 4),
+                                              Text(
+                                                DateFormat('MMM d, yyyy').format(_startDate),
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: InkWell(
+                                        onTap: () => _selectStartTime(context),
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Container(
+                                          padding: EdgeInsets.symmetric(vertical: 16),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: Colors.grey.shade300),
+                                            borderRadius: BorderRadius.circular(12),
+                                            color: Colors.grey.shade50,
+                                          ),
+                                          child: Column(
+                                            children: [
+                                              Icon(Icons.access_time, color: Colors.blue.shade700),
+                                              SizedBox(height: 8),
+                                              Text(
+                                                'Start Time',
+                                                style: TextStyle(
+                                                  color: Colors.grey.shade700,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              SizedBox(height: 4),
+                                              Text(
+                                                _startTime.format(context),
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: InkWell(
+                                        onTap: () => _selectEndDate(context),
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Container(
+                                          padding: EdgeInsets.symmetric(vertical: 16),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: Colors.grey.shade300),
+                                            borderRadius: BorderRadius.circular(12),
+                                            color: Colors.grey.shade50,
+                                          ),
+                                          child: Column(
+                                            children: [
+                                              Icon(Icons.calendar_today, color: Colors.blue.shade700),
+                                              SizedBox(height: 8),
+                                              Text(
+                                                'End Date',
+                                                style: TextStyle(
+                                                  color: Colors.grey.shade700,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              SizedBox(height: 4),
+                                              Text(
+                                                DateFormat('MMM d, yyyy').format(_endDate),
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    SizedBox(width: 12),
+                                    Expanded(
+                                      child: InkWell(
+                                        onTap: () => _selectEndTime(context),
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Container(
+                                          padding: EdgeInsets.symmetric(vertical: 16),
+                                          decoration: BoxDecoration(
+                                            border: Border.all(color: Colors.grey.shade300),
+                                            borderRadius: BorderRadius.circular(12),
+                                            color: Colors.grey.shade50,
+                                          ),
+                                          child: Column(
+                                            children: [
+                                              Icon(Icons.access_time, color: Colors.blue.shade700),
+                                              SizedBox(height: 8),
+                                              Text(
+                                                'End Time',
+                                                style: TextStyle(
+                                                  color: Colors.grey.shade700,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              SizedBox(height: 4),
+                                              Text(
+                                                _endTime.format(context),
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                
+                                SizedBox(height: 32),
+                                
+                                // Location Section
+                                Text(
+                                  'Location (Optional)',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.blue.shade800,
+                                  ),
+                                ),
+                                SizedBox(height: 16),
+                                TextFormField(
+                                  controller: _locationController,
+                                  decoration: InputDecoration(
+                                    labelText: 'Location',
+                                    hintText: 'Enter event location',
+                                    prefixIcon: Icon(Icons.location_on, color: Colors.blue.shade700),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(color: Colors.grey.shade300),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide(color: Colors.blue.shade700, width: 2),
+                                    ),
+                                    filled: true,
+                                    fillColor: Colors.grey.shade50,
+                                    suffixIcon: _isValidatingLocation 
+                                      ? Container(
+                                          height: 20,
+                                          width: 20,
+                                          padding: EdgeInsets.all(8),
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade700),
+                                          ),
+                                        )
+                                      : IconButton(
+                                          icon: Icon(Icons.search, color: Colors.blue.shade700),
+                                          onPressed: () async {
+                                            CloudLogger().userAction('validate_location_button_tapped', {
+                                              'location': _locationController.text,
+                                              'eventId': widget.event.id
+                                            });
+                                            
+                                            if (_locationController.text.isNotEmpty) {
+                                              bool isValid = await _validateLocation(_locationController.text);
+                                              if (!isValid) {
+                                                CloudLogger().warn('Location validation failed in UI', {
+                                                  'eventType': 'LOCATION_VALIDATION',
+                                                  'location': _locationController.text,
+                                                  'eventId': widget.event.id,
+                                                  'validationResult': 'INVALID'
+                                                });
+                                                
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text('Could not find this location'),
+                                                    backgroundColor: Colors.red.shade600,
+                                                  ),
+                                                );
+                                              } else {
+                                                CloudLogger().info('Location validated in UI', {
+                                                  'eventType': 'LOCATION_VALIDATION',
+                                                  'location': _locationController.text,
+                                                  'eventId': widget.event.id,
+                                                  'validationResult': 'VALID'
+                                                });
+                                                
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text('Location validated'),
+                                                    backgroundColor: Colors.green.shade600,
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                          },
+                                        ),
+                                  ),
+                                  onSaved: (value) {
+                                    _location = value ?? '';
+                                    CloudLogger().debug('Location saved', {
+                                      'eventType': 'FORM_INPUT',
+                                      'field': 'location',
+                                      'eventId': widget.event.id,
+                                      'hasLocation': _location.isNotEmpty,
+                                      'length': _location.length
+                                    });
+                                  },
+                                ),
+                                
+                                SizedBox(height: 32),
+                                
+                                // Submit Button
+                                SizedBox(
+                                  width: double.infinity,
+                                  height: 56.0,
+                                  child: ElevatedButton(
+                                    onPressed: _updateEvent,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.blue.shade700,
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      elevation: 2,
+                                    ),
+                                    child: Text(
+                                      'Update Task/Event',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(height: 20),
                               ],
                             ),
                           ),
                         ),
                       ),
-                      SizedBox(height: 24),
+                      SizedBox(height: 40),
                       
                       // App info
                       Padding(

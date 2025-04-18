@@ -269,43 +269,40 @@ class _CreateEventPageState extends State<CreateEventPage> {
   }
 
   // Function to handle creating recurring events
-  calendar.Event _prepareEventWithRecurrence(calendar.Event event) {
-    if (!_isRecurring || _recurrencePattern == 'none') {
-      return event;
-    }
-    
-    List<String> recurrence = [];
-    
-    // Set up the recurrence rule based on selected pattern
-    switch (_recurrencePattern) {
-      case 'daily':
-        recurrence.add('RRULE:FREQ=DAILY');
-        break;
-      case 'weekly':
-        // Get the day of the week for the start date (SU, MO, TU, etc.)
-        final days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
-        final dayOfWeek = days[_startDate.weekday % 7]; // Convert to RRULE day format
-        recurrence.add('RRULE:FREQ=WEEKLY;BYDAY=$dayOfWeek');
-        break;
-      case 'monthly':
-        // Repeat on the same day of the month
-        recurrence.add('RRULE:FREQ=MONTHLY;BYMONTHDAY=${_startDate.day}');
-        break;
-      case 'yearly':
-        // Repeat on the same day of the same month each year
-        recurrence.add('RRULE:FREQ=YEARLY');
-        break;
-    }
-    
-    CloudLogger().info('Applied recurrence pattern to event', {
-      'eventType': 'EVENT_CREATION',
-      'recurrencePattern': _recurrencePattern,
-      'recurrenceRule': recurrence.isNotEmpty ? recurrence[0] : 'none'
-    });
-    
-    event.recurrence = recurrence;
+calendar.Event _prepareEventWithRecurrence(calendar.Event event) {
+  if (!_isRecurring || _recurrencePattern == 'none') {
     return event;
   }
+  
+  List<String> recurrence = [];
+  
+  // Add more granular recurrence options
+  switch (_recurrencePattern) {
+    case 'daily':
+      recurrence.add('RRULE:FREQ=DAILY;INTERVAL=1;COUNT=30'); // Repeat daily for 30 times
+      break;
+    case 'weekly':
+  final days = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+  final dayOfWeek = days[_startDate.weekday % 7];
+  // Use BYDAY with a specific day and ensure INTERVAL is correct
+  recurrence.add('RRULE:FREQ=WEEKLY;BYDAY=$dayOfWeek;INTERVAL=1;BYSETPOS=1;COUNT=12');
+  break;
+
+case 'monthly':
+  // Specify the exact day and use BYSETPOS to ensure precision
+  recurrence.add('RRULE:FREQ=MONTHLY;BYMONTHDAY=${_startDate.day};BYSETPOS=1;INTERVAL=1;COUNT=12');
+  break;
+  }
+  
+  CloudLogger().info('Applied recurrence pattern to event', {
+    'eventType': 'EVENT_CREATION',
+    'recurrencePattern': _recurrencePattern,
+    'recurrenceRule': recurrence.isNotEmpty ? recurrence[0] : 'none'
+  });
+  
+  event.recurrence = recurrence;
+  return event;
+}
 
   Future<void> _createEvent() async {
     CloudLogger().userAction('create_event_button_tapped', {});
@@ -868,10 +865,49 @@ class _CreateEventPageState extends State<CreateEventPage> {
                                           contentPadding: EdgeInsets.zero,
                                           dense: true,
                                         ),
+                                        
+                                        // Weekly option
+                                        RadioListTile<String>(
+                                          title: Text('Every week'),
+                                          value: 'weekly',
+                                          groupValue: _recurrencePattern,
+                                          onChanged: (value) {
+                                            CloudLogger().userAction('recurrence_pattern_changed', {
+                                              'previousPattern': _recurrencePattern,
+                                              'newPattern': value
+                                            });
+                                            
+                                            setState(() {
+                                              _recurrencePattern = value!;
+                                            });
+                                          },
+                                          activeColor: Colors.blue.shade700,
+                                          contentPadding: EdgeInsets.zero,
+                                          dense: true,
+                                        ),
+                                        
+                                        // Monthly option
+                                        RadioListTile<String>(
+                                          title: Text('Every month'),
+                                          value: 'monthly',
+                                          groupValue: _recurrencePattern,
+                                          onChanged: (value) {
+                                            CloudLogger().userAction('recurrence_pattern_changed', {
+                                              'previousPattern': _recurrencePattern,
+                                              'newPattern': value
+                                            });
+                                            
+                                            setState(() {
+                                              _recurrencePattern = value!;
+                                            });
+                                          },
+                                          activeColor: Colors.blue.shade700,
+                                          contentPadding: EdgeInsets.zero,
+                                          dense: true,
+                                        ),
                                       ],
                                     ),
                                   ),
-                                
                                 SizedBox(height: 32),
                                 
                                 // Location Section
