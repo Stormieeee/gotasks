@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:gotask/services/cloud_logger.dart';
 import 'edit_event_page.dart';
 
 class EventDetailsPage extends StatefulWidget {
@@ -31,17 +32,43 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   @override
   void initState() {
     super.initState();
+    
+    CloudLogger().pageView('EventDetailsPage', {
+      'eventId': widget.event.id,
+      'eventTitle': widget.event.summary,
+      'hasLocation': widget.event.location != null && widget.event.location!.isNotEmpty,
+      'hasDescription': widget.event.description != null && widget.event.description!.isNotEmpty
+    });
+    
     _getLocationCoordinates();
   }
 
   @override
   void dispose() {
     _mapController?.dispose();
+    
+    CloudLogger().debug('EventDetailsPage disposed', {
+      'eventType': 'PAGE_LIFECYCLE',
+      'action': 'PAGE_DISPOSED',
+      'eventId': widget.event.id
+    });
+    
     super.dispose();
   }
 
   Future<void> _getLocationCoordinates() async {
+    final stopwatch = Stopwatch()..start();
+    
     if (widget.event.location == null || widget.event.location!.isEmpty) {
+      stopwatch.stop();
+      
+      CloudLogger().info('No location specified for event', {
+        'eventType': 'LOCATION_FETCH',
+        'action': 'NO_LOCATION',
+        'eventId': widget.event.id,
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
+      
       setState(() {
         _isLoadingMap = false;
         _locationError = "No location specified";
@@ -49,20 +76,61 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       return;
     }
 
+    CloudLogger().info('Fetching location coordinates', {
+      'eventType': 'LOCATION_FETCH',
+      'action': 'FETCH_STARTED',
+      'eventId': widget.event.id,
+      'location': widget.event.location
+    });
+    
     try {
       final locations = await locationFromAddress(widget.event.location!);
+      
       if (locations.isNotEmpty) {
+        stopwatch.stop();
+        
+        CloudLogger().info('Location coordinates fetched successfully', {
+          'eventType': 'LOCATION_FETCH',
+          'action': 'FETCH_COMPLETED',
+          'eventId': widget.event.id,
+          'latitude': locations.first.latitude,
+          'longitude': locations.first.longitude,
+          'durationMs': stopwatch.elapsedMilliseconds
+        });
+        
         setState(() {
           _locationCoordinates = LatLng(locations.first.latitude, locations.first.longitude);
           _isLoadingMap = false;
         });
       } else {
+        stopwatch.stop();
+        
+        CloudLogger().warn('Location not found', {
+          'eventType': 'LOCATION_FETCH',
+          'action': 'LOCATION_NOT_FOUND',
+          'eventId': widget.event.id,
+          'location': widget.event.location,
+          'durationMs': stopwatch.elapsedMilliseconds
+        });
+        
         setState(() {
           _isLoadingMap = false;
           _locationError = "Could not find location";
         });
       }
     } catch (e) {
+      stopwatch.stop();
+      
+      CloudLogger().error('Error fetching location coordinates', {
+        'eventType': 'LOCATION_FETCH',
+        'action': 'FETCH_ERROR',
+        'eventId': widget.event.id,
+        'location': widget.event.location,
+        'error': e.toString(),
+        'errorType': e.runtimeType.toString(),
+        'durationMs': stopwatch.elapsedMilliseconds
+      });
+      
       setState(() {
         _isLoadingMap = false;
         _locationError = "Error finding location";
@@ -71,7 +139,19 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
   }
 
   Future<void> _navigateToLocation() async {
+    CloudLogger().userAction('navigate_to_location_button_tapped', {
+      'eventId': widget.event.id,
+      'eventTitle': widget.event.summary,
+      'location': widget.event.location
+    });
+    
     if (widget.event.location == null || widget.event.location!.isEmpty) {
+      CloudLogger().warn('Cannot navigate to location - no location specified', {
+        'eventType': 'NAVIGATION',
+        'action': 'NAVIGATION_FAILED',
+        'reason': 'NO_LOCATION',
+        'eventId': widget.event.id
+      });
       return;
     }
 
@@ -80,11 +160,45 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
       'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(widget.event.location!)}',
     );
 
-    if (await canLaunchUrl(googleMapsUrl)) {
-      await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
-    } else {
+    CloudLogger().info('Attempting to launch maps application', {
+      'eventType': 'NAVIGATION',
+      'action': 'LAUNCH_MAPS_STARTED',
+      'eventId': widget.event.id,
+      'mapUrl': googleMapsUrl.toString()
+    });
+    
+    try {
+      if (await canLaunchUrl(googleMapsUrl)) {
+        await launchUrl(googleMapsUrl, mode: LaunchMode.externalApplication);
+        
+        CloudLogger().info('Maps application launched successfully', {
+          'eventType': 'NAVIGATION',
+          'action': 'LAUNCH_MAPS_SUCCESS',
+          'eventId': widget.event.id
+        });
+      } else {
+        CloudLogger().error('Could not launch maps application', {
+          'eventType': 'NAVIGATION',
+          'action': 'LAUNCH_MAPS_FAILED',
+          'eventId': widget.event.id,
+          'reason': 'CANNOT_LAUNCH_URL'
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open maps for navigation')),
+        );
+      }
+    } catch (e) {
+      CloudLogger().error('Error launching maps application', {
+        'eventType': 'NAVIGATION',
+        'action': 'LAUNCH_MAPS_ERROR',
+        'eventId': widget.event.id,
+        'error': e.toString(),
+        'errorType': e.runtimeType.toString()
+      });
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open maps for navigation')),
+        SnackBar(content: Text('Error opening maps for navigation')),
       );
     }
   }
@@ -143,11 +257,25 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                 ),
               ),
             ),
+            leading: IconButton(
+              icon: Icon(Icons.arrow_back),
+              onPressed: () {
+                CloudLogger().userAction('event_details_back_button_pressed', {
+                  'eventId': widget.event.id
+                });
+                Navigator.of(context).pop();
+              },
+            ),
             actions: [
               IconButton(
                 icon: Icon(Icons.edit),
                 tooltip: 'Edit Event',
                 onPressed: () async {
+                  CloudLogger().userAction('edit_event_from_details_tapped', {
+                    'eventId': widget.event.id,
+                    'eventTitle': widget.event.summary
+                  });
+                  
                   final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -155,7 +283,19 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                     ),
                   );
                   
+                  CloudLogger().pageView('EventDetailsPage', {
+                    'returnedFrom': 'EditEventPage',
+                    'editResult': result.toString(),
+                    'eventId': widget.event.id
+                  });
+                  
                   if (result == true) {
+                    CloudLogger().info('Event updated, returning to previous screen', {
+                      'eventType': 'EVENT_UPDATE',
+                      'action': 'UPDATE_COMPLETED_RETURNING',
+                      'eventId': widget.event.id
+                    });
+                    
                     widget.onEventUpdated();
                     Navigator.pop(context);
                   }
@@ -437,6 +577,13 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                                             mapToolbarEnabled: false,
                                             onMapCreated: (GoogleMapController controller) {
                                               _mapController = controller;
+                                              
+                                              CloudLogger().debug('Google Map created', {
+                                                'eventType': 'MAP_INTERACTION',
+                                                'action': 'MAP_CREATED',
+                                                'eventId': widget.event.id
+                                              });
+                                              
                                               Future.delayed(Duration(milliseconds: 200), () {
                                                 controller.animateCamera(
                                                   CameraUpdate.newLatLngZoom(_locationCoordinates!, 14),
@@ -535,6 +682,12 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           ),
                         ),
                         onPressed: () async {
+                          CloudLogger().userAction('delete_event_button_tapped', {
+                            'eventId': widget.event.id,
+                            'eventTitle': widget.event.summary,
+                            'source': 'EventDetailsPage'
+                          });
+                          
                           final shouldDelete = await showDialog<bool>(
                             context: context,
                             builder: (context) => AlertDialog(
@@ -545,11 +698,23 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                               ),
                               actions: [
                                 TextButton(
-                                  onPressed: () => Navigator.of(context).pop(false),
+                                  onPressed: () {
+                                    CloudLogger().userAction('delete_event_cancelled', {
+                                      'eventId': widget.event.id,
+                                      'eventTitle': widget.event.summary
+                                    });
+                                    Navigator.of(context).pop(false);
+                                  },
                                   child: Text('CANCEL'),
                                 ),
                                 TextButton(
-                                  onPressed: () => Navigator.of(context).pop(true),
+                                  onPressed: () {
+                                    CloudLogger().userAction('delete_event_confirmed', {
+                                      'eventId': widget.event.id,
+                                      'eventTitle': widget.event.summary
+                                    });
+                                    Navigator.of(context).pop(true);
+                                  },
                                   child: Text('DELETE'),
                                   style: TextButton.styleFrom(foregroundColor: Colors.red.shade600),
                                 ),
@@ -558,6 +723,12 @@ class _EventDetailsPageState extends State<EventDetailsPage> {
                           ) ?? false;
 
                           if (shouldDelete) {
+                            CloudLogger().info('Deleting event and returning to previous screen', {
+                              'eventType': 'EVENT_DELETION',
+                              'action': 'DELETE_AND_RETURN',
+                              'eventId': widget.event.id
+                            });
+                            
                             widget.onEventDeleted();
                             Navigator.pop(context);
                           }
