@@ -422,13 +422,13 @@ class _EditEventPageState extends State<EditEventPage> {
       updatedEvent.description = _description;
       
       calendar.EventDateTime start = calendar.EventDateTime();
-      start.dateTime = newStartDateTime.toUtc();
-      start.timeZone = 'UTC';
+      start.dateTime = newStartDateTime.toLocal();
+      start.timeZone = 'Asia/Singapore';
       updatedEvent.start = start;
       
       calendar.EventDateTime end = calendar.EventDateTime();
-      end.dateTime = newEndDateTime.toUtc();
-      end.timeZone = 'UTC';
+      end.dateTime = newEndDateTime.toLocal();
+      end.timeZone = 'Asia/Singapore';
       updatedEvent.end = end;
       
       if (_location.isNotEmpty) {

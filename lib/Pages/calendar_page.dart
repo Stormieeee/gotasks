@@ -77,6 +77,7 @@ class _CalendarPageState extends State<CalendarPage> {
       final fetchStopwatch = Stopwatch()..start();
       final events = await calendarApi.events.list(
         'primary',
+        // Use toUtc() for consistent API calls
         timeMin: start.toUtc(),
         timeMax: end.toUtc(),
         singleEvents: true,
@@ -89,10 +90,12 @@ class _CalendarPageState extends State<CalendarPage> {
       
       for (var event in events.items ?? []) {
         if (event.start?.dateTime != null) {
+          // Convert to local time and then create a normalized date
+          final localEventDate = event.start!.dateTime!.toLocal();
           final eventDate = DateTime(
-            event.start!.dateTime!.year,
-            event.start!.dateTime!.month,
-            event.start!.dateTime!.day,
+            localEventDate.year,
+            localEventDate.month,
+            localEventDate.day,
           );
           
           if (eventMap[eventDate] == null) {
@@ -431,8 +434,8 @@ class _CalendarPageState extends State<CalendarPage> {
                                   ],
                                 ),
                                 child: TableCalendar(
-                                  firstDay: DateTime.utc(2020, 1, 1),
-                                  lastDay: DateTime.utc(2030, 12, 31),
+                                  firstDay: DateTime(2020, 1, 1),
+                                  lastDay: DateTime(2030, 12, 31),
                                   focusedDay: _focusedDay,
                                   calendarFormat: _calendarFormat,
                                   eventLoader: _getEventsForDay,
@@ -450,8 +453,7 @@ class _CalendarPageState extends State<CalendarPage> {
                                       _selectedDay = selectedDay;
                                       _focusedDay = focusedDay;
                                     });
-                                  },
-                                  onFormatChanged: (format) {
+                                  },onFormatChanged: (format) {
                                     CloudLogger().userAction('calendar_format_changed', {
                                       'previousFormat': _calendarFormat.toString(),
                                       'newFormat': format.toString()
@@ -557,8 +559,10 @@ class _CalendarPageState extends State<CalendarPage> {
                                         itemCount: _getEventsForDay(_selectedDay).length,
                                         itemBuilder: (context, index) {
                                           final event = _getEventsForDay(_selectedDay)[index];
-                                          final start = event.start?.dateTime ?? DateTime.now();
-                                          final end = event.end?.dateTime ?? DateTime.now();
+                                          
+                                          // Convert times to local time
+                                          final start = event.start?.dateTime?.toLocal() ?? DateTime.now();
+                                          final end = event.end?.dateTime?.toLocal() ?? DateTime.now();
                                           
                                           final formattedStartTime = DateFormat('h:mm a').format(start);
                                           final formattedEndTime = DateFormat('h:mm a').format(end);

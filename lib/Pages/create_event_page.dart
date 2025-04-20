@@ -380,13 +380,13 @@ case 'monthly':
       event.description = _description;
       
       calendar.EventDateTime start = calendar.EventDateTime();
-      start.dateTime = startDateTime.toUtc();
-      start.timeZone = 'UTC';
+      start.dateTime = startDateTime.toLocal();
+      start.timeZone = 'Asia/Singapore';
       event.start = start;
       
       calendar.EventDateTime end = calendar.EventDateTime();
-      end.dateTime = endDateTime.toUtc();
-      end.timeZone = 'UTC';
+      end.dateTime = endDateTime.toLocal();
+      end.timeZone = 'Asia/Singapore';
       event.end = end;
       
       if (_location.isNotEmpty) {
