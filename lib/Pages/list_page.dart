@@ -86,15 +86,30 @@ class _CalendarPageState extends State<ListPage> {
       final apiStopwatch = Stopwatch()..start();
       final events = await calendarApi.events.list(
         'primary',
-        timeMin: now.toUtc(),
-        timeMax: days.toUtc(),
+        timeMin: now,
+        timeMax: days,
         singleEvents: true,
         orderBy: 'startTime',
       );
       apiStopwatch.stop();
 
       setState(() {
-        _events = events.items ?? [];
+        // Convert times to local and sort events
+        _events = (events.items ?? [])
+          .map((event) {
+            // Ensure start and end times are converted to local time
+            if (event.start?.dateTime != null) {
+              event.start!.dateTime = event.start!.dateTime!.toLocal();
+            }
+            if (event.end?.dateTime != null) {
+              event.end!.dateTime = event.end!.dateTime!.toLocal();
+            }
+            return event;
+          })
+          .toList()
+          ..sort((a, b) => 
+            (a.start?.dateTime ?? DateTime.now()).compareTo(b.start?.dateTime ?? DateTime.now())
+          );
         _isLoading = false;
       });
       
@@ -444,7 +459,7 @@ class _CalendarPageState extends State<ListPage> {
                           )
                         : ClipRRect(
                             borderRadius: BorderRadius.only(
-                              topLeft: Radius.circular(30),
+                              topLeft:Radius.circular(30),
                               topRight: Radius.circular(30),
                             ),
                             child: Container(
@@ -454,8 +469,10 @@ class _CalendarPageState extends State<ListPage> {
                                 itemCount: _events.length,
                                 itemBuilder: (context, index) {
                                   final event = _events[index];
-                                  final start = event.start?.dateTime ?? DateTime.now();
-                                  final end = event.end?.dateTime ?? DateTime.now();
+                                  
+                                  // Convert times to local time
+                                  final start = event.start?.dateTime?.toLocal() ?? DateTime.now();
+                                  final end = event.end?.dateTime?.toLocal() ?? DateTime.now();
                                   
                                   // Show date header for each new date
                                   bool showHeader = index == 0 || 
