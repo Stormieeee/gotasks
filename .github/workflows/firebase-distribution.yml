@@ -30,23 +30,9 @@ jobs:
       - name: Create Firebase Service Credentials file
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}' > firebase_credentials.json
       
-      # Display Signing Key Fingerprints
-      - name: Display Signing Report (Debug and Release Keys)
-        run: |
-          cd android
-          ./gradlew signingReport
-          cd ..
-      
       - name: Build APK
         run: flutter build apk --release
       
-      # Extract fingerprints from the built APK
-      - name: Extract APK Fingerprints
-        run: |
-          echo "Extracting fingerprints from release APK"
-          unzip -p build/app/outputs/flutter-apk/app-release.apk META-INF/CERT.RSA | keytool -printcert
-          echo "====== FINGERPRINTS ABOVE ======"
-          
       - name: Deploy to Firebase App Distribution
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
